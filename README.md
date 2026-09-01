@@ -273,6 +273,19 @@ Verified locally before shipping: `npm install --omit=dev` from the public regis
 (84 packages), `docker build` clean, the built image runs `MODE=list` correctly, and it contains no
 `.env*` files. 412 MB.
 
+### Keeping the image current
+
+Compose uses `pull_policy: missing`, which reuses a cached image and will happily run yesterday's
+build. The symptom is confusing: the container rejects a `MODE` the source clearly supports, e.g.
+
+```
+FATAL: Unknown MODE "associate" (provision | fund | animate | list)
+```
+
+That error text is from the OLD build — CI had already published the new one. Every runner script
+(`demo.sh`, `start.sh`, `animate.sh`) now pulls first, non-fatally, so a private-package pull
+failure still falls back to the cached image. To force it: `./demo.sh pull`.
+
 ### First push
 
 The remote does not exist yet. Create it, then:

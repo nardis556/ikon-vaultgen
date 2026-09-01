@@ -33,6 +33,9 @@ fi
 
 for d in "${DIRS[@]}"; do
   echo "═══ ${d} ═══"
+  # Pull first, non-fatally: `pull_policy: missing` would otherwise reuse a cached image
+  # and silently run an older build.
+  ( cd "$d" && docker compose -p "vg-${d}" pull -q 2>/dev/null ) || echo "  ! pull failed — using cached image"
   if [ "$EXECUTE" = "1" ]; then
     ( cd "$d" && docker compose -p "vg-${d}" up -d --no-deps animate ) && echo "  ✓ daemon up"
   else

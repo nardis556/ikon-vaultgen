@@ -34,6 +34,9 @@ ok=0; fail=0
 for d in "${DIRS[@]}"; do
   echo "═══ ${d} ═══"
   # Foreground to completion: provisioning is a job and its exit code is the result.
+  # Pull first, non-fatally: `pull_policy: missing` would otherwise reuse a cached image
+  # and silently run an older build.
+  ( cd "$d" && docker compose -p "vg-${d}" pull -q 2>/dev/null ) || echo "  ! pull failed — using cached image"
   if ( cd "$d" && docker compose -p "vg-${d}" run --rm -e EXECUTE="$EXECUTE" vaultgen ); then
     echo "  ✓ ${d}"; ok=$((ok+1))
   else
