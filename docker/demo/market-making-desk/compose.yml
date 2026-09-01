@@ -1,0 +1,36 @@
+services:
+  # One-shot: create the vault, name it, seed depositors.
+  # Safe to re-run — it detects an existing vault and tops up instead of re-creating.
+  vaultgen:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file: [../.env.demo, .env.STRATEGY]
+    environment: [NODE_ENV=production, MODE=provision]
+    volumes: &m
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state
+
+  # One-shot: pre-fund the deterministic pool so demo-day has no funding transactions.
+  fund:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file: [../.env.demo, .env.STRATEGY]
+    environment: [NODE_ENV=production, MODE=fund]
+    volumes: *m
+
+  # Daemon: depositor churn + inventory-skewed market making.
+  animate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: unless-stopped
+    env_file: [../.env.demo, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=animate
+      # passed through from the shell by demo.sh start; defaults to dry-run
+      - EXECUTE=${EXECUTE:-0}
+    volumes: *m

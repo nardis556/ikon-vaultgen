@@ -1,0 +1,16 @@
+node_modules/
+dist/
+out/
+state/
+
+# ── Wallet + credential material — NEVER commit ──────────────────────────────
+# ikon-loadgen2 tracks its .env.ACCOUNTS in git (40 private keys + API secrets
+# are in that history, sandbox and staging, plus funding-wallet.txt). Do not
+# repeat it. Deny-all for .env*, with a narrow allowlist for verified-clean files.
+.env
+.env.*
+!.env.example
+!.env.*.example
+# Committed on purpose: strategy selection + run knobs only, no credentials.
+# Keys live in .env.MANAGER / .env.DEPOSITORS, which stay ignored above.
+!.env.STRATEGY

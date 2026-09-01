@@ -1,0 +1,25 @@
+# Excluded from the Docker BUILD CONTEXT — never uploaded to the builder, never
+# shipped inside the image. This is NOT .gitignore: these files still exist locally.
+
+node_modules
+dist
+*.md
+
+# Deployment configs stay host-only. The container receives them at RUNTIME via
+# compose `env_file:` and the .env.MANAGER / .env.DEPOSITORS volume mounts —
+# never baked into the image. This directory holds the funding key, the pool
+# mnemonic, and every manager + depositor private key.
+docker
+
+# Belt-and-braces: no credential file may enter the image even if a future
+# Dockerfile gains a broad `COPY . .`.
+.env
+.env.*
+!.env.*.example
+
+# Runtime artefacts, not inputs.
+out
+state
+
+.git
+.github

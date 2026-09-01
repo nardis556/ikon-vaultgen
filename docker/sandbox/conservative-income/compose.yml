@@ -1,0 +1,37 @@
+services:
+  # One-shot provisioning job. Run with `docker compose run --rm vaultgen`.
+  # NOT a service to `up` — restart:"no" because re-running on every container
+  # restart would try to re-provision.
+  vaultgen:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file: [../.env.sandbox, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=provision
+    volumes:
+      # Wallet material persists on the host so a re-run resumes the SAME vault
+      # instead of minting a second one. Generated on first run.
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state
+
+  # Long-running activity daemon: depositor churn + inventory-skewed market making.
+  # Started separately (./animate.sh) once the vault is provisioned.
+  animate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: unless-stopped
+    env_file: [../.env.sandbox, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=animate
+    volumes:
+      # Wallet material persists on the host so a re-run resumes the SAME vault
+      # instead of minting a second one. Generated on first run.
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state

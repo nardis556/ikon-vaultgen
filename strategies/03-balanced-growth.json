@@ -1,0 +1,59 @@
+{
+  "id": "balanced-growth",
+  "display": {
+    "name": "Balanced Growth",
+    "description": "A blended book: roughly half market-neutral carry, half discretionary directional exposure sized to a fixed risk budget. The manager contributes about half of depositor principal as first-loss capital - meaningful skin in the game without the drag of a fully over-collateralized structure.\n\nExit threshold 1.25x and a 12-hour unapplied-queue age mean depositors retain a credible escape hatch if the manager stops servicing the queue, while still giving the strategy room to run through ordinary drawdowns. Intended as the default allocation for an investor who wants more than pure carry but is not underwriting a high-volatility mandate.",
+    "x": null,
+    "_x_note": "X linking needs a real OAuth click-through per vault (getXChallenge -> authorize on X -> setVaultXConnection). Not automatable; see README."
+  },
+  "profile": "moderate",
+  "vault": {
+    "interestApyPct": 12.0,
+    "maximumNetDeposits": 4000,
+    "exitMultiplier": 1.25,
+    "managerWithdrawMultiplier": 1.2,
+    "unappliedAgeS": 43200,
+    "withdrawalLimitPctDepositors": 60,
+    "withdrawalLimitPctVault": 30
+  },
+  "seed": {
+    "managerSeedUsd": 500
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      80,
+      120
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      24,
+      48
+    ],
+    "depositPctOfBalanceRange": [
+      4,
+      15
+    ],
+    "withdrawPctOfBalanceRange": [
+      3,
+      12
+    ],
+    "depositWeight": 55,
+    "withdrawWeight": 45
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "ETH-USD",
+      "SOL-USD"
+    ],
+    "ordersPerSide": 4,
+    "priceRangePct": 0.006,
+    "skewStrength": 0.6,
+    "maxPositionUsd": 3000,
+    "refreshSeconds": 60,
+    "quoteNotionalUsd": 250
+  }
+}

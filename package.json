@@ -1,0 +1,24 @@
+{
+  "name": "ikon-vaultgen",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Demo fixed-income vault provisioner + activity daemon (depositor churn, inventory-skewed market making).",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "provision": "MODE=provision tsx src/index.ts",
+    "animate": "MODE=animate tsx src/index.ts",
+    "list": "MODE=list tsx src/index.ts"
+  },
+  "dependencies": {
+    "@katanaperps/katana-perps-sdk": "^2.1.0-beta.28",
+    "bignumber.js": "^10.0.2",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.11.1",
+    "tsx": "^4.10.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
