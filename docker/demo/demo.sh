@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Demo runner — one market-making vault on sandbox, end to end.
 #
-#   ./demo.sh check      # read-only: does the vault exist yet? dry-run every step
+#   ./demo.sh check      # read-only: dry-run every step
+#   ./demo.sh associate  # register wallets + attach API credentials (run once, first)
 #   ./demo.sh fund       # pre-fund the deterministic pool (idempotent)
 #   ./demo.sh provision  # create the vault + seed 10 depositors (skips if it exists)
 #   ./demo.sh start      # start churn + inventory-skewed market making
@@ -24,10 +25,13 @@ confirm() {
 
 case "$cmd" in
   check)
-    echo "═══ dry-run: fund ═══";      ( cd $D && docker compose -p $P run --rm -e EXECUTE=0 fund )
+    echo "═══ dry-run: associate ═══"; ( cd $D && docker compose -p $P run --rm -e EXECUTE=0 associate )
+    echo; echo "═══ dry-run: fund ═══";      ( cd $D && docker compose -p $P run --rm -e EXECUTE=0 fund )
     echo; echo "═══ dry-run: provision ═══"; ( cd $D && docker compose -p $P run --rm -e EXECUTE=0 vaultgen )
     echo; echo "═══ dry-run: animate ═══";   ( cd $D && docker compose -p $P run --rm -e EXECUTE=0 -e ONESHOT=1 animate )
     ;;
+  associate) confirm "registering wallets and attaching API credentials"
+             ( cd $D && docker compose -p $P run --rm -e EXECUTE=1 associate ) ;;
   fund)      confirm "pre-funding the demo pool"; ( cd $D && docker compose -p $P run --rm -e EXECUTE=1 fund ) ;;
   provision) confirm "creating the demo vault";   ( cd $D && docker compose -p $P run --rm -e EXECUTE=1 vaultgen ) ;;
   start)     confirm "starting live churn + market making"
@@ -37,5 +41,5 @@ case "$cmd" in
              docker ps --filter "name=$P" --format '  {{.Names}}\t{{.Status}}' ;;
   logs)      ( cd $D && docker compose -p $P logs -f --tail 60 animate ) ;;
   stop)      ( cd $D && docker compose -p $P down --remove-orphans ); echo "stopped (on-chain state untouched)" ;;
-  *) echo "usage: ./demo.sh {check|fund|provision|start|logs|stop}"; exit 1 ;;
+  *) echo "usage: ./demo.sh {check|associate|fund|provision|start|logs|stop}"; exit 1 ;;
 esac

@@ -74,8 +74,9 @@ lives in exchange balances for trading), and vault deposits require on-chain vbU
 ```bash
 # demo — one market-making vault, end to end
 cd docker/demo
-cp .env.demo.example .env.demo           # FUNDING_WALLET_KEY + POOL_MNEMONIC
-./demo.sh check                          # dry-run fund + provision + animate
+cp .env.demo.example .env.demo           # FUNDING_WALLET_KEY, POOL_MNEMONIC, API creds
+./demo.sh check                          # dry-run every stage
+./demo.sh associate                      # register wallets + attach creds (once, first)
 ./demo.sh fund                           # pre-fund the pool (idempotent)
 ./demo.sh provision                      # create vault + seed 10 depositors
 ./demo.sh start                          # churn + skewed market making
@@ -206,6 +207,28 @@ the validator warns, because at full skew the reducing side quotes essentially a
 being market making.
 
 Market making needs manager API credentials; without them the daemon says so and runs churn only.
+
+## API credentials
+
+An API key identifies an **account**, not a wallet. Any number of wallets associate into one
+account and each keeps its own balances and positions — so **one key covers every manager and a
+second covers every depositor pool**, across all strategies. No key per wallet, no key per strategy.
+
+`MODE=associate` (`./demo.sh associate`) registers each wallet with the exchange and stamps the
+credentials into `.env.MANAGER` / `.env.DEPOSITORS` fields 3 and 4. Run it once per deployment
+before funding. A wallet must be associated before the exchange will surface a balance for it, so
+an on-chain deposit made beforehand reads as "not credited".
+
+Who needs credentials:
+
+| | needs API creds | why |
+|---|---|---|
+| manager | yes | `setVaultDetails`, and market-making orders |
+| depositor deposit | **no** | pure on-chain approve + deposit |
+| depositor withdrawal | yes | authenticated REST |
+
+Without manager credentials the daemon runs churn only and says so. Without depositor credentials
+a wallet deposits but never withdraws, and logs the reason rather than failing silently.
 
 ## Name, description, and X
 

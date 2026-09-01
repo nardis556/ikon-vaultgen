@@ -34,3 +34,16 @@ services:
       # passed through from the shell by demo.sh start; defaults to dry-run
       - EXECUTE=${EXECUTE:-0}
     volumes: *m
+
+  # One-shot: register every wallet with the exchange and stamp API credentials into
+  # .env.MANAGER / .env.DEPOSITORS. A wallet must be associated before the exchange
+  # will surface a balance for it, so run this before provisioning.
+  associate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file: [../.env.demo, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=associate
+    volumes: *m

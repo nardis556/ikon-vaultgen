@@ -9,8 +9,9 @@ async function main() {
       return;
     case "provision": return (await import("./provision.js")).provision();
     case "animate":   return (await import("./animate.js")).animate();
+    case "associate": return (await import("./associate.js")).associateAll();
     case "fund":      return (await import("./fund.js")).fund();
-    default: throw new Error(`Unknown MODE "${config.mode}" (provision | fund | animate | list)`);
+    default: throw new Error(`Unknown MODE "${config.mode}" (associate | fund | provision | animate | list)`);
   }
 }
 main().catch((e) => { console.error(`\nFATAL: ${e?.message ?? e}`); process.exit(1); });

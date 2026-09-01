@@ -11,6 +11,10 @@ state/
 .env.*
 !.env.example
 !.env.*.example
+# Any file holding API credentials, whatever it is called.
+*.apikeys
+*apikeys*
+
 # Committed on purpose: strategy selection + run knobs only, no credentials.
 # Keys live in .env.MANAGER / .env.DEPOSITORS, which stay ignored above.
 !.env.STRATEGY
