@@ -26,13 +26,19 @@ import BigNumber from "bignumber.js";
 import type { Client } from "./client.js";
 import type { MarketMakingConfig } from "./strategy.js";
 
-export interface MarketInfo { market: string; indexPrice: number; tickSize: string; takerOrderMinimum: number; }
+export interface MarketInfo {
+  market: string; indexPrice: number; tickSize: string;
+  takerOrderMinimum: number; stepSize: string; minimumPositionSize?: number;
+}
 
 /** Snap to the tick grid, away from mid so a maker quote never becomes a crossing one. */
 function snap(value: number, tickSize: string, side: "buy" | "sell"): string {
   const tick = new BigNumber(tickSize);
   const mode = side === "buy" ? BigNumber.ROUND_DOWN : BigNumber.ROUND_UP;
-  return new BigNumber(value).dividedBy(tick).integerValue(mode).multipliedBy(tick).toFixed();
+  // Fixed 8 decimals, like quantity. Loose formatting ("100.3" rather than "100.30000000")
+  // is rejected with a bare HTTP 400 — every ladder order failed this way while the
+  // identical price sent as 8dp was accepted.
+  return new BigNumber(value).dividedBy(tick).integerValue(mode).multipliedBy(tick).toFixed(8);
 }
 
 export interface Quote { market: string; side: "buy" | "sell"; price: string; quantity: string; }
@@ -79,13 +85,77 @@ export function buildSkewedQuotes(
       if (side === "buy" && Number(price) >= m.indexPrice) continue;
       if (side === "sell" && Number(price) <= m.indexPrice) continue;
       const qty = Math.max(m.takerOrderMinimum, baseQty * sizeMult * (1 - i * 0.05));
-      quotes.push({ market: m.market, side, price, quantity: qty.toFixed(8) });
+      quotes.push({ market: m.market, side, price, quantity: snapQty(qty, m.stepSize, m.takerOrderMinimum) });
     }
   }
 
   const note = `net=${netPosition.toFixed(6)} r=${r.toFixed(3)} `
     + `${long ? "LONG" : r < 0 ? "SHORT" : "flat"} → buyOffset x${buyMult.toFixed(2)} sellOffset x${sellMult.toFixed(2)}`;
   return { quotes, r, note };
+}
+
+/** Snap a quantity DOWN to the market's step grid, never below the taker minimum. */
+function snapQty(qty: number, stepSize: string, takerMin: number): string {
+  const step = new BigNumber(stepSize);
+  let q = new BigNumber(qty).dividedBy(step).integerValue(BigNumber.ROUND_DOWN).multipliedBy(step);
+  if (q.isLessThan(takerMin)) {
+    q = new BigNumber(takerMin).dividedBy(step).integerValue(BigNumber.ROUND_UP).multipliedBy(step);
+  }
+  // The API rejects loose decimal formatting ("Invalid quantity value") — send a fixed
+  // 8-decimal string, the same precision prices use.
+  return q.toFixed(8);
+}
+
+/**
+ * Open seed positions so the vault is visibly running a book.
+ *
+ * The resting ladder is post-only, so it produces a position only when somebody else crosses it
+ * — on a quiet market that may be never, and a demo vault showing zero positions looks dead. This
+ * takes liquidity deliberately with small market orders, on distinct markets, so each manager ends
+ * up holding real inventory.
+ *
+ * It also makes the inventory skew observable, which is the point of the strategy: a flat book
+ * quotes symmetrically, so with no position there is nothing to see. Once inventory exists the
+ * reducing side visibly tightens toward index.
+ *
+ * Sized off quoteNotionalUsd rather than the position cap, so seeding never approaches
+ * maxPositionUsd and leaves the skew room to work in both directions.
+ */
+export async function openSeedPositions(
+  client: Client, markets: MarketInfo[], cfg: MarketMakingConfig,
+  want: number, existing: Record<string, number>,
+  log: (m: string) => void, dryRun: boolean,
+): Promise<number> {
+  // Only markets we are not already in — one position per market keeps the skew per-market clean.
+  const candidates = markets.filter((m) => !existing[m.market]);
+  const targets = candidates.slice(0, Math.max(0, want));
+  if (!targets.length) { log(`    already holding ${Object.keys(existing).length} position(s) — no seeding needed`); return 0; }
+
+  let opened = 0;
+  for (const m of targets) {
+    const notional = cfg.quoteNotionalUsd;
+    const qty = snapQty(notional / m.indexPrice, m.stepSize, m.takerOrderMinimum);
+    // Direction is random so the demo does not show every vault long the same way.
+    const side = Math.random() < 0.5 ? "buy" : "sell";
+    if (dryRun) {
+      log(`    · would ${side} ${qty} ${m.market} (~$${notional}) at market`);
+      opened++; continue;
+    }
+    try {
+      await (client.auth as any).createOrder({
+        nonce: client.nonce(), wallet: client.wallet, market: m.market,
+        side: side === "buy" ? kperps.OrderSide.buy : kperps.OrderSide.sell,
+        type: kperps.OrderType.market,
+        quantity: qty,
+      });
+      log(`    ✓ opened ${side} ${qty} ${m.market} (~$${notional})`);
+      opened++;
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? String(e);
+      log(`    ✗ ${m.market} seed ${side} ${qty}: ${String(msg).slice(0, 100)}`);
+    }
+  }
+  return opened;
 }
 
 /** Net signed base position per market for a wallet, from one getWallets call. */
@@ -127,7 +197,10 @@ export async function requoteMarket(
       });
       placed++;
     } catch (e: any) {
-      log(`      ! ${q.side} ${q.price}: ${String(e?.message ?? e).slice(0, 90)}`);
+      // e.message is only "Request failed with status code 400" — the reason lives in
+      // response.data. Logging the former hid 216 identical failures behind a useless string.
+      const why = e?.response?.data?.message ?? e?.response?.data?.code ?? e?.message ?? String(e);
+      log(`      ! ${q.side} ${q.price}: ${String(why).slice(0, 110)}`);
     }
   }
   return placed;

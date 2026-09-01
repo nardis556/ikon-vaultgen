@@ -14,7 +14,7 @@ import { loadStrategy, validateStrategy } from "./strategy.js";
 import { loadManager, loadDepositorPool } from "./wallets.js";
 import { provider, readVault, sleep } from "./vault.js";
 import { buildClient } from "./client.js";
-import { fetchNetPositions, requoteMarket, type MarketInfo } from "./mm.js";
+import { fetchNetPositions, requoteMarket, openSeedPositions, type MarketInfo } from "./mm.js";
 import { churnTick, loadState, saveState, seedSchedule } from "./churn.js";
 
 const log = (m = "") => console.log(m);
@@ -31,6 +31,7 @@ async function fetchMarkets(want: string[]): Promise<MarketInfo[]> {
     out.push({
       market: hit.market, indexPrice: Number(hit.indexPrice),
       tickSize: hit.tickSize, takerOrderMinimum: Number(hit.takerOrderMinimum),
+      stepSize: hit.stepSize, minimumPositionSize: Number(hit.minimumPositionSize ?? 0),
     });
   }
   return out;
@@ -72,6 +73,7 @@ export async function animate() {
   }
 
   let lastMm = 0;
+  let seeded = false;
   for (;;) {
     const now = Date.now();
     try {
@@ -96,22 +98,42 @@ export async function animate() {
         return;
       }
 
-      if (churnOn) {
-        const n = await churnTick(p, strategy, mgr.address, pool, state, log, !config.execute);
-        if (n) saveState(state);
-      }
-
       if (mmOn && mmClient && now - lastMm >= strategy.marketMaking.refreshSeconds * 1000) {
         lastMm = now;
         const markets = await fetchMarkets(strategy.marketMaking.markets);
         let positions: Record<string, number> = {};
         try { positions = await fetchNetPositions(mmClient); }
         catch (e: any) { log(`  ! ${e?.message ?? e}`); }
+        // Seed real inventory once, so the vault visibly holds positions instead of only
+        // resting post-only quotes that may never be crossed on a quiet market.
+        if (!seeded && config.seedPositions > 0) {
+          const held = Object.keys(positions).filter((k) => positions[k] !== 0).length;
+          if (held < config.seedPositions) {
+            log(`  seeding positions (holding ${held}, want ${config.seedPositions}):`);
+            await openSeedPositions(mmClient, markets, strategy.marketMaking,
+              config.seedPositions - held, positions, log, !config.execute);
+            if (config.execute) {
+              await sleep(4000);
+              try { positions = await fetchNetPositions(mmClient); } catch {}
+            }
+          }
+          seeded = true;
+        }
+
         log(`  market making:`);
         for (const m of markets) {
           await requoteMarket(mmClient, m, strategy.marketMaking, positions[m.market] ?? 0, log, !config.execute);
         }
       }
+
+      // Churn AFTER market making. At a compressed TIME_SCALE every wallet comes due at
+      // once and each action carries a settle delay, so churn-first would starve the
+      // market maker and the vault would never open a position.
+      if (churnOn) {
+        const n = await churnTick(p, strategy, mgr.address, pool, state, log, !config.execute);
+        if (n) saveState(state);
+      }
+
     } catch (e: any) {
       log(`  ! tick error: ${String(e?.message ?? e).slice(0, 160)}`);
     }

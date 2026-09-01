@@ -52,17 +52,23 @@ async function withdrawalGasFee(client: Client): Promise<string> {
 export async function withdrawByQuantity(
   client: Client, managerWallet: string, quantityUsd: number,
 ) {
-  const maximumGasFee = await withdrawalGasFee(client);
+  const bridgeTarget = (kperps as any).BridgeTarget?.KATANA_KATANA ?? "katana.katana";
+  const maximumGasFee = await withdrawalGasFee(client, bridgeTarget);
   return internalApi(client).withdrawFromManagedAccountByQuantity({
     nonce: client.nonce(),
     wallet: client.wallet,
     managerWallet,
-    quantity: quantityUsd.toFixed(6),
+    // 8dp, like every other decimal this API takes.
+    quantity: quantityUsd.toFixed(8),
     // Shares are burned to produce the quantity; an explicit generous cap avoids a
     // rounding-driven rejection while still bounding the trade.
-    maxShares: (quantityUsd * 10).toFixed(6),
+    maxShares: (quantityUsd * 10).toFixed(8),
     maximumGasFee,
     managedAccountProvider: config.vaultProvider,
-    bridgeTarget: (kperps as any).BridgeTarget?.KATANA_KATANA ?? "katana.katana",
+    // Required (not optional) — omitting it sends null and ethers rejects it as an
+    // "invalid BytesLike value" long before the request is signed. No provider-specific
+    // data is needed for a plain quantity withdrawal, so empty bytes.
+    managedAccountProviderPayload: "0x",
+    bridgeTarget,
   });
 }

@@ -71,6 +71,12 @@ export const config = {
   // of wall clock. 1 = real time. Use e.g. 0.001 to watch a week pass in minutes.
   timeScale:        num("TIME_SCALE", "1"),
   tickSeconds:      num("TICK_SECONDS", "30"),
+  // Open this many real positions on the first market-making cycle. The resting ladder is
+  // post-only and only becomes a position when someone crosses it, which on a quiet market
+  // may be never — a demo vault showing zero positions looks dead. It also makes the
+  // inventory skew observable: a flat book quotes symmetrically, so there is nothing to see
+  // until inventory exists. 0 disables.
+  seedPositions:    num("SEED_POSITIONS", "0"),
 
   outDir:           optional("OUT_DIR", "/app/out"),
   stateDir:         optional("STATE_DIR", "/app/state"),

@@ -130,4 +130,8 @@ export function decide(ctx: DecisionContext): Decision {
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
+// Round AFTER clamping: the bounds (headroom, availableToWithdraw) are themselves floats
+// derived from subtraction, so clamping to one reintroduces the very precision it was meant
+// to remove — 3000 - 2988.72 = 11.2800000000002, which parseUnits rejects as too many decimals.
+const clamp = (v: number, lo: number, hi: number) =>
+  Math.round(Math.max(lo, Math.min(v, hi)) * 100) / 100;

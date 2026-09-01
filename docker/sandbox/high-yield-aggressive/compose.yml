@@ -32,6 +32,7 @@ services:
       # environment. Without this the daemon starts and silently sits in DRY-RUN:
       # it looks "up" but never places a quote or moves a deposit.
       - EXECUTE=${EXECUTE:-0}
+      - SEED_POSITIONS=${SEED_POSITIONS:-2}
     volumes:
       # Wallet material persists on the host so a re-run resumes the SAME vault
       # instead of minting a second one. Generated on first run.

@@ -33,6 +33,7 @@ services:
       - MODE=animate
       # passed through from the shell by demo.sh start; defaults to dry-run
       - EXECUTE=${EXECUTE:-0}
+      - SEED_POSITIONS=${SEED_POSITIONS:-2}
     volumes: *m
 
   # One-shot: register every wallet with the exchange and stamp API credentials into

@@ -81,8 +81,14 @@ export async function churnTick(
 ): Promise<number> {
   const churn = strategy.churn;
   const now = Date.now();
-  const due = pool.filter((w) => (state.schedule[w.address] ?? Infinity) <= now);
-  if (!due.length) return 0;
+  const dueAll = pool.filter((w) => (state.schedule[w.address] ?? Infinity) <= now);
+  if (!dueAll.length) return 0;
+  // Cap the work per tick. Each action carries a settle delay, so an unbounded backlog
+  // (every wallet due at once under a compressed TIME_SCALE) would block the loop for
+  // minutes and stall market making. The rest simply run on the next tick.
+  const MAX_PER_TICK = 4;
+  const due = dueAll.slice(0, MAX_PER_TICK);
+  if (dueAll.length > due.length) log(`    (${dueAll.length - due.length} more due — next tick)`);
 
   const vaultState = await readVault(p, managerAddr, pool.map((w) => w.address));
   let headroom = strategy.vault.maximumNetDeposits - vaultState.depositorNetDeposits;
@@ -140,6 +146,17 @@ export async function churnTick(
         }
       }
     } catch (e: any) {
+      const status = e?.response?.status;
+      // A 401 on the withdraw route is a capability limit, not a transient fault: reads with
+      // the same key succeed, so retrying every cycle would only spam the log. Mark the wallet
+      // deposit-only for this process and move on.
+      if (status === 401 && d.action === "withdraw") {
+        (w as any).apiKey = undefined;
+        log(`    – ${w.name} withdrawals unavailable (401 on the withdraw route; reads with the `
+          + `same key work) — treating this wallet as deposit-only`);
+        reschedule(state, w.address, churn, now);
+        continue;
+      }
       const reason = String(e?.message ?? e).slice(0, 120);
       state.history.push({ t: now, wallet: w.address, action: d.action, amount: d.amountUsd, ok: false, reason });
       log(`    ✗ ${w.name} ${d.action}: ${reason}`);

@@ -12,7 +12,7 @@ import { ethers } from "ethers";
 import { config } from "./config.js";
 import { loadStrategy } from "./strategy.js";
 import { loadManager, loadDepositorPool, isDeterministic } from "./wallets.js";
-import { provider, ensureFunded, USDC_DECIMALS } from "./vault.js";
+import { provider, ensureFunded, USDC_DECIMALS , rpcRetry } from "./vault.js";
 
 const log = (m = "") => console.log(m);
 
@@ -38,8 +38,8 @@ export async function fund() {
   const p = provider();
   const funding = new ethers.Wallet(config.fundingKey, p);
   const vb = new ethers.Contract(config.quoteToken, ["function balanceOf(address) view returns (uint256)"], p) as any;
-  const haveUsd = Number(ethers.formatUnits(await vb.balanceOf(funding.address), USDC_DECIMALS));
-  const haveEth = Number(ethers.formatEther(await p.getBalance(funding.address)));
+  const haveUsd = Number(ethers.formatUnits(await rpcRetry("funding balanceOf", () => vb.balanceOf(funding.address)), USDC_DECIMALS));
+  const haveEth = Number(ethers.formatEther(await rpcRetry("funding getBalance", () => p.getBalance(funding.address))));
   const needUsd = mgrUsd + perDep * pool.length;
   const needEth = Number(config.mgrEth) + Number(config.depEth) * pool.length;
   log(`\n  funding      : ${funding.address}`);

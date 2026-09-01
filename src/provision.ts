@@ -15,7 +15,7 @@ import { config } from "./config.js";
 import { loadStrategy, validateStrategy, toChainFields,
          EXPECTED_CREATION_FEE, EXPECTED_CREATION_MINIMUM, EXPECTED_DEPOSIT_FEE } from "./strategy.js";
 import { loadManager, loadDepositorPool } from "./wallets.js";
-import { provider, ensureFunded, createVault, depositTo, readVault, existingVault, USDC_DECIMALS } from "./vault.js";
+import { provider, ensureFunded, createVault, depositTo, readVault, existingVault, USDC_DECIMALS , rpcRetry } from "./vault.js";
 import { buildClient } from "./client.js";
 import { setVaultDetails } from "./withdraw.js";
 
@@ -112,8 +112,8 @@ export async function provision() {
   const p = provider();
   const funding = new ethers.Wallet(config.fundingKey, p);
   const vb = new ethers.Contract(config.quoteToken, ["function balanceOf(address) view returns (uint256)"], p) as any;
-  const haveEth = Number(ethers.formatEther(await p.getBalance(funding.address)));
-  const haveUsd = Number(ethers.formatUnits(await vb.balanceOf(funding.address), USDC_DECIMALS));
+  const haveEth = Number(ethers.formatEther(await rpcRetry("funding getBalance", () => p.getBalance(funding.address))));
+  const haveUsd = Number(ethers.formatUnits(await rpcRetry("funding balanceOf", () => vb.balanceOf(funding.address)), USDC_DECIMALS));
   const needUsd = strategy.seed.managerSeedUsd + 10 + depTotal + amounts.length * 5;
   const needEth = Number(config.mgrEth) + initial.length * Number(config.depEth);
   log(`\n  funding      : ${funding.address}`);
