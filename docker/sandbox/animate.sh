@@ -37,7 +37,7 @@ for d in "${DIRS[@]}"; do
   # and silently run an older build.
   ( cd "$d" && docker compose -p "vg-${d}" pull -q 2>/dev/null ) || echo "  ! pull failed — using cached image"
   if [ "$EXECUTE" = "1" ]; then
-    ( cd "$d" && docker compose -p "vg-${d}" up -d --no-deps animate ) && echo "  ✓ daemon up"
+    ( cd "$d" && EXECUTE=1 docker compose -p "vg-${d}" up -d --no-deps animate ) && echo "  ✓ daemon up (EXECUTE=1)"
   else
     # ONESHOT so a dry run reports one full tick and exits instead of looping forever.
     ( cd "$d" && docker compose -p "vg-${d}" run --rm -e ONESHOT=1 -e EXECUTE=0 animate )
