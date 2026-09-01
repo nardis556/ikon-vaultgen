@@ -239,9 +239,12 @@ adapter call, now made with a minimal ABI in `src/vault.ts` whose calldata is by
 (selector `0x5d303519`, checked against that package's own typechain ABI). Re-adding it means adding
 an `NPM_TOKEN` secret and an `.npmrc` to the build.
 
-The workflow also has a guard step that fails the build if any `.env*` or `*.key` reaches the build
-context, or if `.dockerignore` stops excluding `docker/` — that directory holds the funding key, the
-pool mnemonic, and every manager and depositor private key.
+The workflow is step-for-step identical to `ikon-loadgen2`'s. Credentials are kept out of the image
+by **`.dockerignore`**, not by a CI check: it excludes `docker/` wholesale — the funding key, the
+pool mnemonic, and every manager and depositor private key — plus `.env*`, so none of it is ever
+uploaded to the builder. (An earlier filename-based CI guard was removed: it added nothing over
+`.dockerignore` and false-positived on the seven committed `.env.STRATEGY` knob files, which are
+credential-free by design.)
 
 Verified locally before shipping: `npm install --omit=dev` from the public registry with no auth
 (84 packages), `docker build` clean, the built image runs `MODE=list` correctly, and it contains no
