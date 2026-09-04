@@ -1,0 +1,67 @@
+{
+  "id": "donchian-breakout",
+  "display": {
+    "name": "Donchian Breakout",
+    "description": "this is the risky one. read the parameters.\n\n20-bar donchian channel on 15m btc. close above the high plus a quarter atr(14) and we're long, below the low minus the same and we're short. the atr filter is there so a tick through the band doesn't count as a break. we're flat inside the channel.\n\nbreakouts fail more often than they work. the whole thing rests on the ones that don't.\n\nwe put in the bare protocol minimum, so it's mostly your money. exit is 0.60x \u2014 the vault has to be well underwater before anyone forces us out. you're betting on us, not the structure.",
+    "x": null,
+    "_x_note": "X linking needs a real OAuth click-through per vault (getXChallenge -> authorize on X -> setVaultXConnection). Not automatable; see README."
+  },
+  "profile": "low-requirement",
+  "vault": {
+    "interestApyPct": 45.0,
+    "maximumNetDeposits": 6000,
+    "exitMultiplier": 0.6,
+    "managerWithdrawMultiplier": 0.55,
+    "unappliedAgeS": 3600,
+    "withdrawalLimitPctDepositors": 25,
+    "withdrawalLimitPctVault": 15
+  },
+  "seed": {
+    "managerSeedUsd": 150
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      150,
+      260
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      18,
+      36
+    ],
+    "depositPctOfBalanceRange": [
+      5,
+      20
+    ],
+    "withdrawPctOfBalanceRange": [
+      5,
+      18
+    ],
+    "depositWeight": 50,
+    "withdrawWeight": 50
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "BTC-USD",
+      "ETH-USD",
+      "SOL-USD"
+    ],
+    "ordersPerSide": 6,
+    "priceRangePct": 0.01,
+    "skewStrength": 0.35,
+    "maxPositionUsd": 800,
+    "refreshSeconds": 30,
+    "quoteNotionalUsd": 250
+  },
+  "signal": {
+    "kind": "donchian",
+    "interval": "15m",
+    "period": 20,
+    "atrPeriod": 14,
+    "atrMult": 0.25
+  }
+}

@@ -124,6 +124,7 @@ function snapQty(qty: number, stepSize: string, takerMin: number): string {
 export async function openSeedPositions(
   client: Client, markets: MarketInfo[], cfg: MarketMakingConfig,
   want: number, existing: Record<string, number>,
+  bias: Record<string, number>,
   log: (m: string) => void, dryRun: boolean,
 ): Promise<number> {
   // Only markets we are not already in — one position per market keeps the skew per-market clean.
@@ -135,8 +136,12 @@ export async function openSeedPositions(
   for (const m of targets) {
     const notional = cfg.quoteNotionalUsd;
     const qty = snapQty(notional / m.indexPrice, m.stepSize, m.takerOrderMinimum);
-    // Direction is random so the demo does not show every vault long the same way.
-    const side = Math.random() < 0.5 ? "buy" : "sell";
+    // Direction comes from the strategy's rule. A bias of 0 means the rule has no setup
+    // right now (RSI mid-range, price inside the channel or the bands) — in that case we
+    // open nothing and just keep quoting, which is what the strategy actually says it does.
+    const b = bias[m.market] ?? 0;
+    if (b === 0) { log(`    – ${m.market}: no setup, holding no position (still quoting)`); continue; }
+    const side = b > 0 ? "buy" : "sell";
     if (dryRun) {
       log(`    · would ${side} ${qty} ${m.market} (~$${notional}) at market`);
       opened++; continue;

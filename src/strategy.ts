@@ -12,6 +12,7 @@
  * Validating here turns that into a startup error naming the field.
  */
 import { readFileSync, readdirSync } from "fs";
+import type { SignalSpec } from "./signals.js";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -66,6 +67,8 @@ export interface Strategy {
   depositors: { count: number; amountUsdRange: [number, number] };
   churn: ChurnConfig;
   marketMaking: MarketMakingConfig;
+  /** The trading rule. `none` = pure market making, no directional view. */
+  signal: SignalSpec;
 }
 
 export function listStrategies(): { id: string; name: string; profile: string }[] {

@@ -1,0 +1,64 @@
+{
+  "id": "bollinger-fade",
+  "display": {
+    "name": "Bollinger Fade",
+    "description": "bollinger(20, 2σ) on 5m sol. close above the upper band we sell it, below the lower we buy it, inside the bands we hold nothing and quote.\n\ntickets start around ten dollars — this is a first deposit, not an allocation. small size, no leverage games, and you can pull your whole balance in one go.",
+    "x": null,
+    "_x_note": "X linking needs a real OAuth click-through per vault (getXChallenge -> authorize on X -> setVaultXConnection). Not automatable; see README."
+  },
+  "profile": "low-barrier",
+  "vault": {
+    "interestApyPct": 7,
+    "maximumNetDeposits": 1000,
+    "exitMultiplier": 1.8,
+    "managerWithdrawMultiplier": 1,
+    "unappliedAgeS": 86400,
+    "withdrawalLimitPctDepositors": 100,
+    "withdrawalLimitPctVault": 100
+  },
+  "seed": {
+    "managerSeedUsd": 300
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      10,
+      25
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      24,
+      48
+    ],
+    "depositPctOfBalanceRange": [
+      6,
+      25
+    ],
+    "withdrawPctOfBalanceRange": [
+      5,
+      20
+    ],
+    "depositWeight": 55,
+    "withdrawWeight": 45
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "SOL-USD"
+    ],
+    "ordersPerSide": 3,
+    "priceRangePct": 0.004,
+    "skewStrength": 0.5,
+    "maxPositionUsd": 900,
+    "refreshSeconds": 45,
+    "quoteNotionalUsd": 120
+  },
+  "signal": {
+    "kind": "bollinger",
+    "interval": "5m",
+    "period": 20,
+    "stddev": 2
+  }
+}

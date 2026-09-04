@@ -26,7 +26,7 @@ import { config } from "./config.js";
 import type { ChurnConfig, Strategy } from "./strategy.js";
 import type { Signer } from "./wallets.js";
 import { buildClient } from "./client.js";
-import { withdrawByQuantity } from "./withdraw.js";
+import { withdrawOnChain } from "./withdraw-onchain.js";
 import { depositTo, ensureFunded, readVault, vaultBalance } from "./vault.js";
 import { decide } from "./decide.js";
 
@@ -138,8 +138,9 @@ export async function churnTick(
         if (dryRun) {
           log(`    · ${w.name} would withdraw: ${d.reason}`);
         } else {
-          const c = buildClient(w.apiKey!, w.apiSecret!, w.privateKey);
-          await withdrawByQuantity(c, managerAddr, d.amountUsd);
+          const hash = await withdrawOnChain(p, new ethers.Wallet(w.privateKey, p),
+            managerAddr, d.amountUsd);
+          log(`      tx ${hash.slice(0, 18)}…`);
           state.history.push({ t: now, wallet: w.address, action: "withdraw", amount: d.amountUsd, ok: true });
           log(`    ✓ ${w.name} withdraw enqueued — ${d.reason}`);
           acted++;

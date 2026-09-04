@@ -75,7 +75,13 @@ const adapterFor = (signer: ethers.Wallet) =>
   new ethers.Contract(config.depositAdapter, ADAPTER_ABI, signer) as any;
 
 export function provider(): ethers.JsonRpcProvider {
-  return new ethers.JsonRpcProvider(config.rpcUrl, undefined, { staticNetwork: true });
+  // FetchRequest rather than a bare URL so the access key can travel as a header. Without a key
+  // the public endpoint rate-limits as a JSON-RPC error inside a 200 response (-32017), which
+  // ethers' own throttling cannot see — hence rpcRetry below.
+  const fr = new ethers.FetchRequest(config.rpcUrl);
+  fr.setHeader("User-Agent", "ikon-vaultgen");
+  if (config.rpcAccessKey) fr.setHeader("X-AccessKey", config.rpcAccessKey);
+  return new ethers.JsonRpcProvider(fr, undefined, { staticNetwork: true });
 }
 
 export async function waitReceipt(p: ethers.JsonRpcProvider, hash: string) {
@@ -112,11 +118,24 @@ export async function existingVault(p: ethers.JsonRpcProvider, managerAddr: stri
              numDepositorWallets: Number(s[10]), totalOwed: Number(s[12]) / PIPS,
              depositorNetDeposits: Number(s[9]) / PIPS };
   } catch (e: any) {
-    // 0xe64a6a36 = provider's "no vault for this manager wallet". Anything else is a real fault
-    // and must not be mistaken for "safe to create".
+    // dev/sandbox revert the provider's "no vault for this manager wallet" custom error.
     const d = String(e?.data ?? e?.info?.error?.data ?? "");
     if (d.startsWith("0xe64a6a36")) return { exists: false } as any;
-    throw new Error(`could not determine whether a vault exists for ${managerAddr}: ${e?.message ?? e}`);
+
+    // staging reverts the same condition with NO revert data at all, so the selector check
+    // is not portable. Rather than guess at encodings, confirm the provider is actually
+    // answering: if a known-good view responds, the contract is healthy and the failure above
+    // means "this manager has no vault". If it does not, the fault is real and must not be
+    // mistaken for "safe to create" — creating a second vault costs another seed.
+    try {
+      const probe = new ethers.Contract(config.vaultProvider,
+        ["function isAddManagedAccountEnabled() view returns (bool)"], p) as any;
+      await rpcRetry("provider liveness probe", () => probe.isAddManagedAccountEnabled());
+      return { exists: false } as any;
+    } catch {
+      throw new Error(`could not determine whether a vault exists for ${managerAddr} — the provider `
+        + `at ${config.vaultProvider} is not answering reads: ${e?.message ?? e}`);
+    }
   }
 }
 

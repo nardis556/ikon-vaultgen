@@ -1,0 +1,63 @@
+{
+  "id": "market-making",
+  "display": {
+    "name": "Market Making",
+    "description": "no signal, no view. we quote both sides of btc eth and sol continuously and earn the spread and the rebates.\n\nthe only thing that moves our quotes is what we're already holding. get long and the offers tighten toward index while the bids back off, so the book works its way back to flat instead of digging in. flat book, symmetric quotes.\n\nexit sits at 1.10x, basically par. a book like this gets marked constantly and shouldn't wander far from what it owes \u2014 so if it does, that's worth knowing.",
+    "x": null,
+    "_x_note": "X linking needs a real OAuth click-through per vault (getXChallenge -> authorize on X -> setVaultXConnection). Not automatable; see README."
+  },
+  "profile": "equal",
+  "vault": {
+    "interestApyPct": 18.0,
+    "maximumNetDeposits": 3000,
+    "exitMultiplier": 1.1,
+    "managerWithdrawMultiplier": 1.0,
+    "unappliedAgeS": 21600,
+    "withdrawalLimitPctDepositors": 80,
+    "withdrawalLimitPctVault": 40
+  },
+  "seed": {
+    "managerSeedUsd": 800
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      60,
+      100
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      24,
+      48
+    ],
+    "depositPctOfBalanceRange": [
+      4,
+      14
+    ],
+    "withdrawPctOfBalanceRange": [
+      3,
+      12
+    ],
+    "depositWeight": 55,
+    "withdrawWeight": 45
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "BTC-USD",
+      "ETH-USD",
+      "SOL-USD"
+    ],
+    "ordersPerSide": 6,
+    "priceRangePct": 0.003,
+    "skewStrength": 0.8,
+    "maxPositionUsd": 4000,
+    "refreshSeconds": 30,
+    "quoteNotionalUsd": 250
+  },
+  "signal": {
+    "kind": "none"
+  }
+}

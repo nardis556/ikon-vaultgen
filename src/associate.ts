@@ -63,9 +63,16 @@ export async function associateAll() {
   log("=".repeat(74));
   if (!mgrKey || !mgrSecret) throw new Error("MANAGER_API_KEY / MANAGER_API_SECRET are required");
 
-  const { signer: mgr } = loadManager(false);
+  // associate is the FIRST step in the flow (associate -> fund -> provision), so it has to be
+  // able to mint the wallets it is registering. Requiring them to pre-exist made the documented
+  // ordering impossible to follow.
+  const { signer: mgr, created: mgrCreated } = loadManager(config.generateWallets);
   const poolSize = config.depositorPoolSize || strategy.depositors.count;
-  const { pool } = loadDepositorPool(poolSize, false);
+  const { pool, created: poolCreated } = loadDepositorPool(poolSize, config.generateWallets);
+  if (mgrCreated || poolCreated) {
+    log(`  generated ${mgrCreated ? "manager" : ""}${mgrCreated && poolCreated ? " + " : ""}`
+      + `${poolCreated ? `${poolCreated} pool wallets` : ""}`);
+  }
   log(`  manager      : ${mgr.address}   (key ...${mgrKey.slice(-6)})`);
   log(`  pool         : ${pool.length} wallets`
     + (depKey ? `   (key ...${depKey.slice(-6)})` : `   — no DEPOSITOR_API_KEY, they will deposit only`));

@@ -12,7 +12,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 PREFIX=vg
 EXECUTE="${EXECUTE:-0}"
-DIRS=(conservative-income delta-neutral-basis balanced-growth high-yield-aggressive market-making-desk retail-starter)
+DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade)
 
 [ -f .env.sandbox ] || { echo "✗ .env.sandbox missing — copy .env.sandbox.example and fill in FUNDING_WALLET_KEY"; exit 1; }
 

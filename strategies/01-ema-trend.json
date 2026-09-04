@@ -1,0 +1,64 @@
+{
+  "id": "ema-trend",
+  "display": {
+    "name": "EMA 50/200 Trend",
+    "description": "we quote both sides of eth and the 50/200 ema cross on 15m decides which way we lean. fast above slow, we open long and the bids sit tighter. below, the other way. one position at a time, flipped on the cross, no stop other than the flip itself.\n\nit's a trend rule, so it loses small and often in chop and makes it back on the runs. if you can't sit through the chop this isn't the vault.\n\nmanager capital is about 3x depositor principal — we take the first loss by a wide margin. exit is 1.95x, so you can leave while the vault is still solvent.",
+    "x": null,
+    "_x_note": "X linking needs a real OAuth click-through per vault (getXChallenge -> authorize on X -> setVaultXConnection). Not automatable; see README."
+  },
+  "profile": "over-collateralized",
+  "vault": {
+    "interestApyPct": 4.5,
+    "maximumNetDeposits": 1500,
+    "exitMultiplier": 1.95,
+    "managerWithdrawMultiplier": 1,
+    "unappliedAgeS": 86400,
+    "withdrawalLimitPctDepositors": 100,
+    "withdrawalLimitPctVault": 50
+  },
+  "seed": {
+    "managerSeedUsd": 1000
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      20,
+      40
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      36,
+      72
+    ],
+    "depositPctOfBalanceRange": [
+      3,
+      10
+    ],
+    "withdrawPctOfBalanceRange": [
+      2,
+      8
+    ],
+    "depositWeight": 60,
+    "withdrawWeight": 40
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "ETH-USD"
+    ],
+    "ordersPerSide": 3,
+    "priceRangePct": 0.004,
+    "skewStrength": 0.5,
+    "maxPositionUsd": 3000,
+    "refreshSeconds": 45,
+    "quoteNotionalUsd": 120
+  },
+  "signal": {
+    "kind": "ema-cross",
+    "interval": "15m",
+    "fast": 50,
+    "slow": 200
+  }
+}

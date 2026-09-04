@@ -28,6 +28,10 @@ export const config = {
   chainId:          parseInt(required("CHAIN_ID")),
   sandbox:          optional("SANDBOX", "true") === "true",
   rpcUrl:           required("RPC_URL"),
+  // Conduit access key. The public Bokuto endpoint rate-limits aggressively (~20 of 25 calls in a
+  // burst); with a key it is 25/25. Sent as the X-AccessKey header so RPC_URL stays a plain,
+  // shareable hostname and only this value is secret.
+  rpcAccessKey:     optional("RPC_ACCESS_KEY", ""),
   exchangeContract: required("EXCHANGE_CONTRACT"),
   vaultProvider:    required("VAULT_PROVIDER"),
   depositAdapter:   required("LOCAL_DEPOSIT_ADAPTER"),

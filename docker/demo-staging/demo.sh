@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Demo runner — one market-making vault on sandbox, end to end.
+# Demo runner — one market-making vault on STAGING, end to end.
+#
+# Separate from docker/demo (sandbox) and docker/staging (the six-strategy set):
+# its own wallets (INSTANCE=demo on the staging derivation), its own project prefix,
+# so resetting the demo never disturbs either of the others.
 #
 #   ./demo.sh check      # read-only: dry-run every step
 #   ./demo.sh associate  # register wallets + attach API credentials (run once, first)
@@ -18,10 +22,10 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 D=market-making
-P=vgdemo-$D
+P=vgdemostg-$D
 cmd="${1:-check}"
 
-[ -f .env.demo ] || { echo "✗ .env.demo missing — copy .env.demo.example, fill FUNDING_WALLET_KEY + POOL_MNEMONIC"; exit 1; }
+[ -f .env.demo-staging ] || { echo "✗ .env.demo-staging missing — copy .env.demo-staging.example, fill FUNDING_WALLET_KEY + POOL_MNEMONIC"; exit 1; }
 
 # Pull, but never fatally: with `pull_policy: missing` a cached image still runs, which is
 # the normal case when the GHCR package is private.

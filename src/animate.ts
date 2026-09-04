@@ -16,6 +16,7 @@ import { provider, readVault, sleep } from "./vault.js";
 import { buildClient } from "./client.js";
 import { fetchNetPositions, requoteMarket, openSeedPositions, type MarketInfo } from "./mm.js";
 import { churnTick, loadState, saveState, seedSchedule } from "./churn.js";
+import { evaluateSignal } from "./signals.js";
 
 const log = (m = "") => console.log(m);
 const ts = () => new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -104,6 +105,20 @@ export async function animate() {
         let positions: Record<string, number> = {};
         try { positions = await fetchNetPositions(mmClient); }
         catch (e: any) { log(`  ! ${e?.message ?? e}`); }
+
+        // Evaluate the strategy's rule per market, every cycle.
+        const bias: Record<string, number> = {};
+        log(`  signal (${strategy.signal?.kind ?? "none"}):`);
+        for (const m of markets) {
+          try {
+            const r = await evaluateSignal(m.market, strategy.signal);
+            bias[m.market] = r.bias;
+            log(`    ${m.market.padEnd(9)} ${r.bias > 0 ? "LONG " : r.bias < 0 ? "SHORT" : "flat "}  ${r.reason}`);
+          } catch (e: any) {
+            bias[m.market] = 0;
+            log(`    ${m.market.padEnd(9)} signal error: ${String(e?.message ?? e).slice(0, 70)}`);
+          }
+        }
         // Seed real inventory once, so the vault visibly holds positions instead of only
         // resting post-only quotes that may never be crossed on a quiet market.
         if (!seeded && config.seedPositions > 0) {
@@ -111,7 +126,7 @@ export async function animate() {
           if (held < config.seedPositions) {
             log(`  seeding positions (holding ${held}, want ${config.seedPositions}):`);
             await openSeedPositions(mmClient, markets, strategy.marketMaking,
-              config.seedPositions - held, positions, log, !config.execute);
+              config.seedPositions - held, positions, bias, log, !config.execute);
             if (config.execute) {
               await sleep(4000);
               try { positions = await fetchNetPositions(mmClient); } catch {}
