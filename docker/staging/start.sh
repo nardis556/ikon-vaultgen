@@ -11,7 +11,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 PREFIX=vgstg
 EXECUTE="${EXECUTE:-0}"
-DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade)
+DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade gold-trend)
 [ -f .env.staging ] || { echo "✗ .env.staging missing"; exit 1; }
 if [ "$#" -gt 0 ]; then
   SEL=(); for w in "$@"; do for d in "${DIRS[@]}"; do [ "$d" = "$w" ] && SEL+=("$d"); done; done

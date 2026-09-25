@@ -1,0 +1,39 @@
+{
+  "id": "gold-trend",
+  "display": {
+    "name": "XAU Momentum",
+    "description": "gold only. we quote both sides of xau-usd and a 20/50 ema cross on the 1h decides which way we lean — fast above slow we carry a long and the bids sit tighter, below and it's the other way. one position, flipped on the cross, no stop besides the flip.\n\ngold is not crypto. it moves a few tenths of a percent on a normal day, so the quotes sit inside 15bps of index rather than the 40bps a crypto book needs, and the vault earns most of its keep from spread rather than from the trend. expect long flat stretches.\n\nxau is an rwa market with a real trading session — it closes for about an hour every day and over the weekend. the vault stops quoting when the session is closed and picks up when it reopens, so gaps in activity are the schedule, not a stall.\n\nmanager capital is about 3x depositor principal, so the manager takes the first loss by a wide margin. the exit trigger sits at 0.95x owed and manager withdrawals are blocked below 1.0x owed — the manager cannot pull capital out and leave the vault exitable behind them.",
+    "x": null
+  },
+  "profile": "over-collateralized",
+  "vault": {
+    "interestApyPct": 3.5,
+    "maximumNetDeposits": 1500,
+    "exitMultiplier": 0.95,
+    "managerWithdrawMultiplier": 1.0,
+    "unappliedAgeS": 86400,
+    "withdrawalLimitPctDepositors": 100,
+    "withdrawalLimitPctVault": 50
+  },
+  "seed": { "managerSeedUsd": 1000 },
+  "depositors": { "count": 10, "amountUsdRange": [20, 40] },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [36, 72],
+    "depositPctOfBalanceRange": [3, 10],
+    "withdrawPctOfBalanceRange": [2, 8],
+    "depositWeight": 60,
+    "withdrawWeight": 40
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": ["XAU-USD"],
+    "ordersPerSide": 3,
+    "priceRangePct": 0.0015,
+    "skewStrength": 0.4,
+    "maxPositionUsd": 3000,
+    "refreshSeconds": 60,
+    "quoteNotionalUsd": 150
+  },
+  "signal": { "kind": "ema-cross", "interval": "1h", "fast": 20, "slow": 50 }
+}

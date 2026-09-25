@@ -33,6 +33,8 @@ async function fetchMarkets(want: string[]): Promise<MarketInfo[]> {
       market: hit.market, indexPrice: Number(hit.indexPrice),
       tickSize: hit.tickSize, takerOrderMinimum: Number(hit.takerOrderMinimum),
       stepSize: hit.stepSize, minimumPositionSize: Number(hit.minimumPositionSize ?? 0),
+      tradingSessionStatus: hit.tradingSessionStatus,
+      approximateNextOpenTime: Number(hit.approximateNextOpenTime ?? 0),
     });
   }
   return out;
@@ -101,7 +103,16 @@ export async function animate() {
 
       if (mmOn && mmClient && now - lastMm >= strategy.marketMaking.refreshSeconds * 1000) {
         lastMm = now;
-        const markets = await fetchMarkets(strategy.marketMaking.markets);
+        const allMarkets = await fetchMarkets(strategy.marketMaking.markets);
+        // RWA markets (gold, silver, oil) close daily and at weekends. Quoting into a closed book
+        // just collects rejections, so sit the session out and say when it reopens.
+        const closed = allMarkets.filter((m) => m.tradingSessionStatus && m.tradingSessionStatus !== "open");
+        for (const m of closed) {
+          const when = m.approximateNextOpenTime ? new Date(m.approximateNextOpenTime).toISOString().slice(11, 16) + "Z" : "?";
+          log(`  ${m.market} session ${m.tradingSessionStatus} — not quoting, reopens ~${when}`);
+        }
+        const markets = allMarkets.filter((m) => !m.tradingSessionStatus || m.tradingSessionStatus === "open");
+        if (markets.length === 0) { log("  all configured markets are closed this cycle"); }
         let positions: Record<string, number> = {};
         try { positions = await fetchNetPositions(mmClient); }
         catch (e: any) { log(`  ! ${e?.message ?? e}`); }

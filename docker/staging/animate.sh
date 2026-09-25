@@ -11,7 +11,7 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 EXECUTE="${EXECUTE:-0}"
-DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade)
+DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade gold-trend)
 
 [ -f .env.staging ] || { echo "✗ .env.staging missing"; exit 1; }
 

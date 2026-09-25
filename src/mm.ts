@@ -29,6 +29,9 @@ import type { MarketMakingConfig } from "./strategy.js";
 export interface MarketInfo {
   market: string; indexPrice: number; tickSize: string;
   takerOrderMinimum: number; stepSize: string; minimumPositionSize?: number;
+  /** RWA markets (XAU, XAG, WTI) close daily and at weekends: "open" | "closed" | "preOpen" | … */
+  tradingSessionStatus?: string;
+  approximateNextOpenTime?: number;
 }
 
 /** Snap to the tick grid, away from mid so a maker quote never becomes a crossing one. */

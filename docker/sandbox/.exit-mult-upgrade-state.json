@@ -1,0 +1,26 @@
+{
+ "ema-trend": {
+  "manager": "0xf5d3B77B936483d4a233C891D8FF2C3511306cA0",
+  "newExitPct": 65,
+  "initiatedTx": "0x8fc5b5d11504577fb9a3bb9e9ccff0acd18073a582e1754108d5386643cc0069",
+  "finalizableAt": 1789663576,
+  "finalizedTx": "0x38c07dbf5390d249c5cff137290281f0b0772d22c621a2a8c6ddb81da1ae5229",
+  "verified": true
+ },
+ "macd-crossover": {
+  "manager": "0x11a477F79f1122742E4803Fe14DBd6FDbbC9f0f5",
+  "newExitPct": 60,
+  "initiatedTx": "0x2d07a16ed1cfb99f2cb08a7c6993b135fb6dd938b3af5bb828b9fe761ed6ed86",
+  "finalizableAt": 1789663582,
+  "finalizedTx": "0x1345eef452a4772eb0a7c0cbc54b57f28dbc9735f7bec25f407049ee7cd68029",
+  "verified": true
+ },
+ "rsi-pullback": {
+  "manager": "0x203427Ef0041Cc175E28fCDd5d6c1Ba57d6aD05B",
+  "newExitPct": 70,
+  "initiatedTx": "0x3368587da4f9ba53dc08390d6675af18d905cb6bdc72227697164f51d5d5bcdc",
+  "finalizableAt": 1789663593,
+  "finalizedTx": "0x8551a98cfbeb5c0bb182931115b726976d813fea1b3d74a75b581e3c283109d9",
+  "verified": true
+ }
+}
