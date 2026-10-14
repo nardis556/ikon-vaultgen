@@ -26,8 +26,8 @@ import { config } from "./config.js";
 import type { ChurnConfig, Strategy } from "./strategy.js";
 import type { Signer } from "./wallets.js";
 import { buildClient } from "./client.js";
-import { withdrawOnChain } from "./withdraw-onchain.js";
-import { depositTo, ensureFunded, readVault, vaultBalance } from "./vault.js";
+import { withdrawOnChain, withdrawSharesOnChain } from "./withdraw-onchain.js";
+import { depositTo, ensureFunded, readVault, vaultBalance, isPsv } from "./vault.js";
 import { decide } from "./decide.js";
 
 export interface ChurnState { schedule: Record<string, number>; history: { t: number; wallet: string; action: string; amount: number; ok: boolean; reason?: string }[]; }
@@ -138,8 +138,13 @@ export async function churnTick(
         if (dryRun) {
           log(`    · ${w.name} would withdraw: ${d.reason}`);
         } else {
-          const hash = await withdrawOnChain(p, new ethers.Wallet(w.privateKey, p),
-            managerAddr, d.amountUsd);
+          const dw = new ethers.Wallet(w.privateKey, p);
+          // FIV withdraws a USD quantity; PSV burns shares (= USD / current share price), with a
+          // slippage floor of half the target (≥ $1) on the quote received.
+          const hash = isPsv()
+            ? await withdrawSharesOnChain(p, dw, managerAddr,
+                d.amountUsd / ((vaultState as any).sharePrice || 1), Math.max(1, d.amountUsd * 0.5))
+            : await withdrawOnChain(p, dw, managerAddr, d.amountUsd);
           log(`      tx ${hash.slice(0, 18)}…`);
           state.history.push({ t: now, wallet: w.address, action: "withdraw", amount: d.amountUsd, ok: true });
           log(`    ✓ ${w.name} withdraw enqueued — ${d.reason}`);

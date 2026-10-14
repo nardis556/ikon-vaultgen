@@ -30,7 +30,8 @@ export const EXPECTED_CREATION_FEE = 10;
 export const EXPECTED_DEPOSIT_FEE = 0.05;
 export const EXPECTED_WITHDRAWAL_MINIMUM = 1;
 
-const BOUNDS = {
+// Fixed-Income Vault field bounds (owed/interest model).
+const FIV_BOUNDS = {
   interestApyPct:               { min: 0,    max: 1000 },
   maximumNetDeposits:           { min: 100,  max: 1e12 },      // MIN_MAXIMUM_NET_DEPOSITS = $100
   exitMultiplier:               { min: 0.50, max: 2.00 },      // both enforced
@@ -39,6 +40,18 @@ const BOUNDS = {
   withdrawalLimitPctDepositors: { min: 10,   max: 100 },       // both enforced
   withdrawalLimitPctVault:      { min: 0,    max: 100 },
 } as const;
+// Profit-Share Vault field bounds (share/price model, carry + management fees). Verified against the
+// deployed PSV provider: MAX_CARRY_FEE_MULTIPLIER = 99.999999%, management fee max 1000%/yr, the same
+// $100 maximum-net-deposit floor, 1h..28d unapplied age, and the same withdrawal-limit percents.
+const PSV_BOUNDS = {
+  carryFeePct:                  { min: 0,    max: 99.999999 },
+  managementFeePct:             { min: 0,    max: 1000 },
+  maximumNetDeposits:           { min: 100,  max: 1e12 },
+  unappliedAgeS:                { min: 3600, max: 2_419_200 },
+  withdrawalLimitPctDepositors: { min: 10,   max: 100 },
+  withdrawalLimitPctVault:      { min: 0,    max: 100 },
+} as const;
+const boundsFor = (vt: "FIV" | "PSV") => (vt === "PSV" ? PSV_BOUNDS : FIV_BOUNDS);
 
 export interface ChurnConfig {
   enabled: boolean;
@@ -61,6 +74,9 @@ export interface MarketMakingConfig {
 export interface Strategy {
   id: string;
   profile: string;
+  /** Which managed-account type this strategy mints. Default FIV. A PSV strategy's `vault` block
+   *  carries carry/management-fee economics instead of interest/exit multipliers. */
+  vaultType?: "FIV" | "PSV";
   display: { name: string; description: string; x?: string | null };
   vault: Record<string, number>;
   seed: { managerSeedUsd: number };
@@ -100,9 +116,10 @@ export function validateStrategy(s: Strategy): string[] {
   else if (s.display.description.length > VAULT_DESCRIPTION_CHARACTER_LIMIT)
     errs.push(`display.description is ${s.display.description.length} chars — max ${VAULT_DESCRIPTION_CHARACTER_LIMIT}`);
 
-  for (const [k, b] of Object.entries(BOUNDS)) {
+  const vtype = s.vaultType ?? "FIV";
+  for (const [k, b] of Object.entries(boundsFor(vtype))) {
     const v = s.vault?.[k];
-    if (typeof v !== "number" || Number.isNaN(v)) { errs.push(`vault.${k} must be a number`); continue; }
+    if (typeof v !== "number" || Number.isNaN(v)) { errs.push(`vault.${k} must be a number (required for a ${vtype} vault)`); continue; }
     if (v < b.min || v > b.max) errs.push(`vault.${k}=${v} is outside the on-chain bound [${b.min}, ${b.max}]`);
   }
 
@@ -161,6 +178,10 @@ export function validateStrategy(s: Strategy): string[] {
         + `liquidate the vault mid-demo`);
   }
 
+  // ── FIV-only economics checks (exit/manager-withdraw multipliers) ─────────
+  // PSV has no exit/manager-withdraw multipliers (it uses carry + management fees), so these
+  // deadlock-band and exit-reachability checks apply only to Fixed-Income vaults.
+  if (vtype === "FIV") {
   // ── Parameter-deadlock band ───────────────────────────────────────────────
   // Exit needs EAV < exitMult x owed; manager withdrawal needs EAV >= mgrWdMult x owed. When
   // mgrWdMult > exitMult there is a band of EAV where NEITHER is possible. Legal on-chain, a real
@@ -184,6 +205,7 @@ export function validateStrategy(s: Strategy): string[] {
         + `${owedMid.toFixed(0)}. Over-collateralized and healthy — expected for this profile.`);
     }
   }
+  } // end FIV-only economics checks
 
   if (errs.length) throw new Error(`Strategy "${s.id}" is invalid:\n  - ${errs.join("\n  - ")}`);
   return warns;
@@ -201,5 +223,23 @@ export function toChainFields(s: Strategy, decimalToPip: (v: string) => any): Re
     minimumUnappliedWithdrawalAgeInSNeededToInitiateExit: s.vault.unappliedAgeS,
     withdrawalLimitPercentForDepositorsInPips: decimalToPip((s.vault.withdrawalLimitPctDepositors / 100).toFixed(2)),
     withdrawalLimitPercentForVaultInPips: decimalToPip((s.vault.withdrawalLimitPctVault / 100).toFixed(2)),
+  };
+}
+
+/**
+ * Human values -> the PSV VaultConfigurationFields integer tuple fields. PSV has NO exit/manager-
+ * withdraw multipliers and NO interest — instead a carry fee (% of realized profit) and a management
+ * fee (% per year). Fee/percent values are pips where 1e8 = 100% (so 10% -> 1e7, 1000%/yr -> 1e9).
+ * The SDK ships no PSV encoder (its PSV typechain struct does not match the deployed provider), so
+ * vault.ts hand-encodes this positional tuple — field ORDER there must match the struct.
+ */
+export function toPsvChainFields(s: Strategy, decimalToPip: (v: string) => any): Record<string, any> {
+  return {
+    carryFeeMultiplier:                                       decimalToPip((s.vault.carryFeePct / 100).toFixed(8)),
+    managementFeeMultiplier:                                  decimalToPip((s.vault.managementFeePct / 100).toFixed(8)),
+    maximumNetDeposits:                                       decimalToPip(String(s.vault.maximumNetDeposits)),
+    minimumUnappliedDepositOrWithdrawalAgeInSToInitiateExit:  s.vault.unappliedAgeS,
+    withdrawalLimitPercentForDepositors:                      decimalToPip((s.vault.withdrawalLimitPctDepositors / 100).toFixed(8)),
+    withdrawalLimitPercentForVault:                           decimalToPip((s.vault.withdrawalLimitPctVault / 100).toFixed(8)),
   };
 }

@@ -90,6 +90,13 @@ export function writeCredentials(
 }
 
 export function loadManager(generate: boolean): { signer: Signer; created: boolean } {
+  // Fresh-per-run: mint a brand-new random manager, attach the shared API credentials from env, and
+  // persist nothing — so `docker compose run --rm` leaves no wallet behind.
+  if (config.freshWallets) {
+    const w = ethers.Wallet.createRandom();
+    return { signer: { name: "MANAGER", address: w.address, privateKey: w.privateKey,
+             apiKey: config.managerApiKey || undefined, apiSecret: config.managerApiSecret || undefined }, created: true };
+  }
   const existing = parseFile(MANAGER_FILE, /^MANAGER$/i);
   if (existing.length) return { signer: existing[0], created: false };
   if (!generate) throw new Error(`No manager wallet. Provide ${MANAGER_FILE} `
@@ -112,6 +119,16 @@ export function loadManager(generate: boolean): { signer: Signer; created: boole
  * existing entries — index order is what ties a wallet to its provisioned deposit.
  */
 export function loadDepositorPool(poolSize: number, generate: boolean): { pool: Signer[]; created: number } {
+  // Fresh-per-run: mint a brand-new random pool with the shared depositor API credentials, persist nothing.
+  if (config.freshWallets) {
+    const pool: Signer[] = [];
+    for (let i = 0; i < poolSize; i++) {
+      const w = ethers.Wallet.createRandom();
+      pool.push({ name: `DEPOSITOR${String(i + 1).padStart(3, "0")}`, address: w.address, privateKey: w.privateKey,
+                  apiKey: config.depositorApiKey || undefined, apiSecret: config.depositorApiSecret || undefined });
+    }
+    return { pool, created: poolSize };
+  }
   const existing = parseFile(DEPOSITORS_FILE, /^DEPOSITOR\d+$/i);
   if (existing.length >= poolSize) return { pool: existing, created: 0 };
   if (!generate) throw new Error(`Depositor pool has ${existing.length} of ${poolSize} wallets in `

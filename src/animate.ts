@@ -12,7 +12,7 @@ import { ethers } from "ethers";
 import { config } from "./config.js";
 import { loadStrategy, validateStrategy } from "./strategy.js";
 import { loadManager, loadDepositorPool } from "./wallets.js";
-import { provider, readVault, sleep } from "./vault.js";
+import { provider, readVault, sleep, isPsv } from "./vault.js";
 import { buildClient } from "./client.js";
 import { fetchNetPositions, requoteMarket, openSeedPositions, type MarketInfo } from "./mm.js";
 import { churnTick, loadState, saveState, seedSchedule } from "./churn.js";
@@ -94,7 +94,10 @@ export async function animate() {
         }
         throw e;
       }
-      log(`\n[${ts()}] depositors=${v.numDepositorWallets} owed=$${v.totalOwed.toFixed(2)} `
+      const sizeLabel = isPsv()
+        ? `value=$${v.totalOwed.toFixed(2)} price=$${((v as any).sharePrice ?? 0).toFixed(4)}`
+        : `owed=$${v.totalOwed.toFixed(2)}`;
+      log(`\n[${ts()}] depositors=${v.numDepositorWallets} ${sizeLabel} `
         + `pending=$${v.depositorPending.toFixed(2)}${v.isExited ? " EXITED" : ""}${v.isLiquidated ? " LIQUIDATED" : ""}`);
       if (v.isLiquidated || v.isExited) {
         log(`  vault is ${v.isLiquidated ? "liquidated" : "exited"} — stopping the daemon; nothing further is meaningful.`);

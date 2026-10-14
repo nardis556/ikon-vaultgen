@@ -1,0 +1,49 @@
+{
+  "id": "psv-ema-trend",
+  "vaultType": "PSV",
+  "display": {
+    "name": "PSV EMA 50/200 Trend",
+    "description": "a profit-share version of the ema trend vault. we quote both sides of eth and the 50/200 ema cross on 15m decides which way we lean. one position at a time, flipped on the cross.\n\nunlike a fixed-income vault there is no promised interest — depositors buy SHARES and their value floats with the manager's pnl. the manager takes a 15% carry on realized profit and a 2%/yr management fee; when the strategy makes money the share price rises and everyone shares it, when it loses the share price falls.\n\nbuy cheaper, get more shares. a 2%/yr management fee drips to the manager continuously regardless of pnl.",
+    "x": null
+  },
+  "profile": "profit-share",
+  "vault": {
+    "carryFeePct": 15,
+    "managementFeePct": 2,
+    "maximumNetDeposits": 1500,
+    "unappliedAgeS": 86400,
+    "withdrawalLimitPctDepositors": 100,
+    "withdrawalLimitPctVault": 50
+  },
+  "seed": {
+    "managerSeedUsd": 1000
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [20, 40]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [36, 72],
+    "depositPctOfBalanceRange": [3, 10],
+    "withdrawPctOfBalanceRange": [2, 8],
+    "depositWeight": 60,
+    "withdrawWeight": 40
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": ["ETH-USD"],
+    "ordersPerSide": 3,
+    "priceRangePct": 0.004,
+    "skewStrength": 0.5,
+    "maxPositionUsd": 3000,
+    "refreshSeconds": 45,
+    "quoteNotionalUsd": 120
+  },
+  "signal": {
+    "kind": "ema-cross",
+    "interval": "15m",
+    "fast": 50,
+    "slow": 200
+  }
+}

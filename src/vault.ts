@@ -74,6 +74,32 @@ const ADAPTER_ABI = ["function deposit(uint256 quoteAssetQuantityInAssetUnits, b
 const adapterFor = (signer: ethers.Wallet) =>
   new ethers.Contract(config.depositAdapter, ADAPTER_ABI, signer) as any;
 
+// ── Profit-Share Vault (PSV) view surface ───────────────────────────────────
+// PSV has NO owed/interest model — a depositor holds SHARES and the vault has a share PRICE; a
+// wallet's value = shares × price (there is no "owed"). ABI confirmed against the deployed dev PSV
+// provider. loadVaultSummary word map: [0] isDepositEnabled [1] isExited [2] isLiquidated
+// [3] configFields-tuple [8] depositorNetDeposits [10] numDepositorWallets [11] sharePrice
+// [12] totalShares. loadVaultBalanceForWallet: [0] costBasis [3] pendingDepositQuantity [5] totalShares.
+export const PSV_VAULT_ABI = [
+  "function loadVaultSummary(address) view returns ((bool,bool,bool,(address,uint64,uint64,uint64,uint64,uint64,uint64),uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64))",
+  "function loadVaultBalanceForWallet(address,address) view returns ((uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64))",
+  "function loadSharePrice(address) view returns (uint64)",
+  "function loadVaultWithdrawQueueLength(address) view returns (uint256)",
+];
+export const isPsv = () => config.vaultType === "PSV";
+const abiFor = () => (isPsv() ? PSV_VAULT_ABI : VAULT_ABI);
+
+/** Hand-encode the 7-field PSV VaultConfigurationFields tuple (the SDK ships no PSV encoder; its PSV
+ *  typechain struct does not match the deployed provider). Field order matches the on-chain struct. */
+export function encodePsvConfig(managerWallet: string, f: Record<string, any>): string {
+  return ethers.AbiCoder.defaultAbiCoder().encode(
+    ["tuple(address,uint64,uint64,uint64,uint64,uint64,uint64)"],
+    [[managerWallet, f.carryFeeMultiplier, f.managementFeeMultiplier, f.maximumNetDeposits,
+      f.minimumUnappliedDepositOrWithdrawalAgeInSToInitiateExit, f.withdrawalLimitPercentForDepositors,
+      f.withdrawalLimitPercentForVault]],
+  );
+}
+
 export function provider(): ethers.JsonRpcProvider {
   // FetchRequest rather than a bare URL so the access key can travel as a header. Without a key
   // the public endpoint rate-limits as a JSON-RPC error inside a 200 response (-32017), which
@@ -111,9 +137,16 @@ export async function ensureFunded(p: ethers.JsonRpcProvider, to: string, ethAmt
  * ComposeFailed event. So a naive re-run silently costs another seed and creates nothing.
  */
 export async function existingVault(p: ethers.JsonRpcProvider, managerAddr: string) {
-  const vp = new ethers.Contract(config.vaultProvider, VAULT_ABI, p) as any;
+  const vp = new ethers.Contract(config.vaultProvider, abiFor(), p) as any;
   try {
     const s = await rpcRetry("loadVaultSummary", () => vp.loadVaultSummary(managerAddr));
+    if (isPsv()) {
+      // PSV: no "owed" — report the vault's total VALUE (totalShares × sharePrice) in its place.
+      const value = (Number(s[12]) / PIPS) * (Number(s[11]) / PIPS);
+      return { exists: true, isActive: !Boolean(s[1]) && !Boolean(s[2]), isExited: Boolean(s[1]), isLiquidated: Boolean(s[2]),
+               numDepositorWallets: Number(s[10]), totalOwed: value,
+               depositorNetDeposits: Number(s[8]) / PIPS };
+    }
     return { exists: true, isActive: Boolean(s[0]), isExited: Boolean(s[1]), isLiquidated: Boolean(s[2]),
              numDepositorWallets: Number(s[10]), totalOwed: Number(s[12]) / PIPS,
              depositorNetDeposits: Number(s[9]) / PIPS };
@@ -144,9 +177,10 @@ export async function createVault(
   opts: { manager: ethers.Wallet; seedUsd: number; fields: Record<string, any>; log: (m: string) => void },
 ): Promise<boolean> {
   const { manager, seedUsd, fields, log } = opts;
-  const cfg = encodeFixedIncomeVaultConfigurationFields({
-    managerWallet: manager.address, effectiveTimestampInS: 0, ...fields,
-  });
+  // FIV uses the SDK encoder (9-field, with effectiveTimestampInS); PSV hand-encodes the 7-field tuple.
+  const cfg = isPsv()
+    ? encodePsvConfig(manager.address, fields)
+    : encodeFixedIncomeVaultConfigurationFields({ managerWallet: manager.address, effectiveTimestampInS: 0, ...fields });
   const payload = ethers.AbiCoder.defaultAbiCoder().encode(
     ["uint8", "tuple(uint32,address,address,bytes,bytes)"],
     [DepositBridgeAdapterPayloadType.addManagedAccount,
@@ -157,9 +191,18 @@ export async function createVault(
   await waitReceipt(p, (await rpcRetry("adapter deposit (create)", () => adapterFor(manager)
     .deposit(ethers.parseUnits(String(seedUsd), USDC_DECIMALS), payload))).hash);
   log(`  addManagedAccount submitted (seed $${seedUsd}); polling for apply…`);
-  const vp = new ethers.Contract(config.vaultProvider, VAULT_ABI, p) as any;
+  const vp = new ethers.Contract(config.vaultProvider, abiFor(), p) as any;
   for (let i = 0; i < 16; i++) {
-    try { const s = await rpcRetry("loadVaultSummary", () => vp.loadVaultSummary(manager.address)); if (s[0] && !s[1] && !s[2]) return true; } catch {}
+    try {
+      if (isPsv()) {
+        // PSV liveness = the manager's seed minted shares (loadVaultBalanceForWallet[5]). Proven live.
+        const b = await rpcRetry("loadVaultBalanceForWallet", () => vp.loadVaultBalanceForWallet(manager.address, manager.address));
+        if (BigInt(b[5]) > 0n) return true;
+      } else {
+        const s = await rpcRetry("loadVaultSummary", () => vp.loadVaultSummary(manager.address));
+        if (s[0] && !s[1] && !s[2]) return true;
+      }
+    } catch {}
     await sleep(6000);
   }
   return false;
@@ -177,7 +220,9 @@ export async function depositTo(
 ): Promise<boolean> {
   const { managerAddr, dep, amountUsd, expectDepositors, settleMs, log } = opts;
   const attempts = opts.attempts ?? 3;
-  const vp = new ethers.Contract(config.vaultProvider, VAULT_ABI, p) as any;
+  const vp = new ethers.Contract(config.vaultProvider, abiFor(), p) as any;
+  // depositorPendingDepositQuantity is word [13] on the FIV summary, [9] on the PSV summary.
+  const pendingIdx = isPsv() ? 9 : 13;
   // Pin to 2dp here rather than trusting callers: any float arithmetic upstream
   // (headroom subtraction, percentage of owed) can produce 9.379999999999999, which
   // parseUnits rejects outright.
@@ -207,7 +252,7 @@ export async function depositTo(
         const s = await rpcRetry("loadVaultSummary", () => vp.loadVaultSummary(managerAddr));
         const bal = await vaultBalance(p, managerAddr, dep.address);
         // Applied when nothing is left pending AND this wallet's principal actually moved.
-        if (Number(s[13]) === 0 && Number(s[10]) >= expectDepositors && bal.costBasis > before.costBasis + 0.001) return true;
+        if (Number(s[pendingIdx]) === 0 && Number(s[10]) >= expectDepositors && bal.costBasis > before.costBasis + 0.001) return true;
       } catch {}
       await sleep(6000);
     }
@@ -218,8 +263,19 @@ export async function depositTo(
 }
 
 export async function vaultBalance(p: ethers.JsonRpcProvider, managerAddr: string, wallet: string) {
-  const vp = new ethers.Contract(config.vaultProvider, VAULT_ABI, p) as any;
+  const vp = new ethers.Contract(config.vaultProvider, abiFor(), p) as any;
   try {
+    if (isPsv()) {
+      // PSV: a wallet holds shares; value = shares × sharePrice. No locked/owed; map owed→value so
+      // downstream reporting/churn reads one field. loadVaultBalanceForWallet: [0] costBasis [3] pending [5] shares.
+      const b = await rpcRetry("loadVaultBalance", () => vp.loadVaultBalanceForWallet(managerAddr, wallet));
+      const price = Number(await rpcRetry("loadSharePrice", () => vp.loadSharePrice(managerAddr))) / PIPS;
+      const value = (Number(b[5]) / PIPS) * price;
+      return {
+        costBasis: Number(b[0]) / PIPS, locked: 0, owed: value,
+        pendingDeposit: Number(b[3]) / PIPS, availableToWithdraw: value,
+      };
+    }
     const b = await rpcRetry("loadVaultBalance", () => vp.loadVaultBalanceForWalletSummary(managerAddr, wallet));
     return {
       costBasis: Number(b[0]) / PIPS, locked: Number(b[2]) / PIPS, owed: Number(b[3]) / PIPS,
@@ -230,11 +286,29 @@ export async function vaultBalance(p: ethers.JsonRpcProvider, managerAddr: strin
 
 /** Read vault state at a PINNED block so aggregate and per-wallet reads are mutually consistent. */
 export async function readVault(p: ethers.JsonRpcProvider, managerAddr: string, depositors: string[]) {
-  const vp = new ethers.Contract(config.vaultProvider, VAULT_ABI, p) as any;
-  // Both views accrue interest to block.timestamp; reading them in separate calls against "latest"
-  // manufactures drift that looks like an accounting bug. Pin one block for all of them.
+  const vp = new ethers.Contract(config.vaultProvider, abiFor(), p) as any;
+  // Both views accrue (interest for FIV, management fee for PSV) to block.timestamp; reading them in
+  // separate calls against "latest" manufactures drift that looks like an accounting bug. Pin one block.
   const pin = await rpcRetry("getBlockNumber", () => p.getBlockNumber());
   const s = await rpcRetry("loadVaultSummary pinned", () => vp.loadVaultSummary(managerAddr, { blockTag: pin }));
+
+  if (isPsv()) {
+    // PSV: `owed` is replaced by VALUE = shares × sharePrice. The FIV owed==sum(perWallet) invariant
+    // does not apply (share price is a single oracle-derived number), so deltaPips is 0.
+    const price = Number(await rpcRetry("loadSharePrice pinned", () => vp.loadSharePrice(managerAddr, { blockTag: pin }))) / PIPS;
+    const per: { address: string; owed: number; costBasis: number }[] = [];
+    for (const d of depositors) {
+      const b = await rpcRetry("loadVaultBalance pinned", () => vp.loadVaultBalanceForWallet(managerAddr, d, { blockTag: pin }));
+      per.push({ address: d, owed: (Number(b[5]) / PIPS) * price, costBasis: Number(b[0]) / PIPS });
+    }
+    return {
+      pin, isActive: !Boolean(s[1]) && !Boolean(s[2]), isExited: Boolean(s[1]), isLiquidated: Boolean(s[2]),
+      depositorNetDeposits: Number(s[8]) / PIPS, numDepositorWallets: Number(s[10]),
+      totalOwed: (Number(s[12]) / PIPS) * price, depositorPending: Number(s[9]) / PIPS, sharePrice: price,
+      perDepositor: per.filter((x) => x.owed > 0 || x.costBasis > 0), deltaPips: 0,
+    };
+  }
+
   const per: { address: string; owed: number; costBasis: number }[] = [];
   for (const d of depositors) {
     const b = await rpcRetry("loadVaultBalance pinned", () => vp.loadVaultBalanceForWalletSummary(managerAddr, d, { blockTag: pin }));
@@ -243,7 +317,7 @@ export async function readVault(p: ethers.JsonRpcProvider, managerAddr: string, 
   return {
     pin, isActive: Boolean(s[0]), isExited: Boolean(s[1]), isLiquidated: Boolean(s[2]),
     depositorNetDeposits: Number(s[9]) / PIPS, numDepositorWallets: Number(s[10]),
-    totalOwed: Number(s[12]) / PIPS, depositorPending: Number(s[13]) / PIPS,
+    totalOwed: Number(s[12]) / PIPS, depositorPending: Number(s[13]) / PIPS, sharePrice: 0,
     perDepositor: per.filter((x) => x.owed > 0 || x.costBasis > 0),
     deltaPips: Math.round(per.reduce((a, x) => a + x.owed, 0) * PIPS) - Number(s[12]),
   };

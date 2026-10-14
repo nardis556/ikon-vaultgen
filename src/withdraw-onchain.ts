@@ -103,3 +103,75 @@ export async function withdrawOnChain(
   await waitReceipt(p, tx.hash);
   return tx.hash;
 }
+
+// ── PSV by-shares withdrawal ─────────────────────────────────────────────────
+// Profit-Share vaults burn SHARES, not a USD quantity. The struct mirrors the by-quantity one but
+// carries `shares` + `minimumQuantity` (the depositor-signed slippage floor on the quote received)
+// instead of `grossQuantity` + `maxShares`. Field order matches the deployed provider's
+// WithdrawalFromManagedAccountByShares (verified in foundry-tests/test/psv-fork/PSVForkBase.sol).
+// As with FIV, a LOCAL by-shares withdrawal (bridgeAdapter == 0) may be submitted by the depositor
+// itself; the whitelisted dispatcher later applies it (grossQuantity = shares × price).
+const PROVIDER_SHARES_ABI = [
+  "function withdrawByShares((uint128,address,address,uint64,uint64,uint64,address,bytes,address,bytes,uint64,bytes) withdrawal)",
+];
+
+/**
+ * Withdraw `shares` from `managerWallet`'s PSV vault, signed by and submitted from `depositor`.
+ * `minimumQuantityUsd` is the depositor's slippage floor on the quote received (≥ $1). Returns the tx hash.
+ *
+ * ⚠ RUNTIME-VERIFY: the SDK typed-data helper name below is the by-shares analog of the proven
+ * by-quantity one. The SDK is not installed in this checkout to confirm it; if it is named
+ * differently in the deployed beta, adjust the one call. The on-chain struct + ABI are confirmed.
+ */
+export async function withdrawSharesOnChain(
+  p: ethers.JsonRpcProvider,
+  depositor: ethers.Wallet,
+  managerWallet: string,
+  shares: number,
+  minimumQuantityUsd: number,
+): Promise<string> {
+  const sh = Math.round(shares * 100) / 100;
+  const minQty = Math.max(1, Math.round(minimumQuantityUsd * 100) / 100); // MINIMUM_WITHDRAWAL_QUANTITY = $1
+  const nonce = uuidv1();
+  const maximumGasFee = MINIMUM_MAXIMUM_GAS_FEE;
+
+  const typedData: any = await (kperps as any).getWithdrawalFromManagedAccountBySharesSignatureTypedData(
+    {
+      nonce,
+      wallet: depositor.address,
+      managerWallet,
+      shares: sh.toFixed(8),
+      minimumQuantity: minQty.toFixed(8),
+      maximumGasFee: maximumGasFee.toFixed(8),
+      managedAccountProvider: config.vaultProvider,
+      managedAccountProviderPayload: "0x",
+      bridgeAdapterAddress: ZERO,
+      bridgeAdapterPayload: "0x",
+    },
+    config.exchangeContract,
+    config.chainId,
+    config.sandbox,
+  );
+  const signature = await depositor.signTypedData(typedData[0], typedData[1], typedData[2]);
+
+  const struct = [
+    BigInt("0x" + nonce.replace(/-/g, "")),   // uint128 nonce
+    managerWallet,
+    depositor.address,
+    toPips(sh),                               // shares
+    toPips(minQty),                           // minimumQuantity
+    toPips(maximumGasFee),
+    config.vaultProvider,
+    "0x",                                     // managedAccountProviderPayload
+    ZERO,                                     // bridgeAdapter -> local
+    "0x",                                     // bridgeAdapterPayload -> local
+    0n,                                       // gasFee actually charged
+    signature,
+  ];
+
+  const vp = new ethers.Contract(config.vaultProvider, PROVIDER_SHARES_ABI, depositor) as any;
+  await rpcRetry("withdrawByShares staticCall", () => vp.withdrawByShares.staticCall(struct));
+  const tx = await rpcRetry("withdrawByShares send", () => vp.withdrawByShares(struct, { gasLimit: 2_000_000 }));
+  await waitReceipt(p, tx.hash);
+  return tx.hash;
+}

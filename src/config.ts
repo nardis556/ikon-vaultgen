@@ -33,10 +33,18 @@ export const config = {
   // shareable hostname and only this value is secret.
   rpcAccessKey:     optional("RPC_ACCESS_KEY", ""),
   exchangeContract: required("EXCHANGE_CONTRACT"),
+  // The active managed-account provider for THIS deployment. Set per-env to the provider that
+  // matches VAULT_TYPE: the Fixed-Income provider for FIV, the Profit-Share provider for PSV.
   vaultProvider:    required("VAULT_PROVIDER"),
   depositAdapter:   required("LOCAL_DEPOSIT_ADAPTER"),
   quoteToken:       required("QUOTE_TOKEN"),
   lzEndpointId:     parseInt(optional("LZ_ENDPOINT_ID", "40448")),
+
+  // ── Vault type ────────────────────────────────────────────────────────────
+  // FIV = Fixed-Income Vault (owed/interest model, by-quantity withdrawals).
+  // PSV = Profit-Share Vault (share/price model, carry+management fees, by-shares withdrawals).
+  // One deployment drives ONE type; VAULT_PROVIDER above must be the provider for that type.
+  vaultType:        (optional("VAULT_TYPE", "FIV").toUpperCase() as "FIV" | "PSV"),
 
   // ── Which vault this deployment drives ────────────────────────────────────
   strategy:         required("STRATEGY"),
@@ -53,14 +61,25 @@ export const config = {
   mgrEth:           optional("MGR_ETH", "0.004"),
   depEth:           optional("DEP_ETH", "0.002"),
 
-  // Manager API credentials come from .env.MANAGER (fields 3/4), NOT from env —
-  // that keeps .env.STRATEGY committable.
+  // Manager API credentials normally come from .env.MANAGER (fields 3/4), NOT from env — that keeps
+  // .env.STRATEGY committable. The EXCEPTION is FRESH_WALLETS mode: there are no persisted wallet
+  // files, so the shared API credentials (one key identifies an ACCOUNT, reusable across every fresh
+  // manager / depositor) are supplied here and attached to each freshly-minted signer in memory.
+  managerApiKey:      optional("MANAGER_API_KEY", ""),
+  managerApiSecret:   optional("MANAGER_API_SECRET", ""),
+  depositorApiKey:    optional("DEPOSITOR_API_KEY", ""),
+  depositorApiSecret: optional("DEPOSITOR_API_SECRET", ""),
 
   // ── Behaviour ─────────────────────────────────────────────────────────────
   mode:             optional("MODE", "provision"),   // provision | animate | list
   execute:          optional("EXECUTE", "0") === "1",
   setDetails:       optional("SET_DETAILS", "1") === "1",
   generateWallets:  optional("GENERATE_WALLETS", "1") === "1",
+  // Fresh-per-run: when set, every run mints BRAND-NEW random manager + depositor wallets
+  // (never resumes the ones in .env.MANAGER/.env.DEPOSITORS), funds them just-in-time from the
+  // shared funding wallet, and reuses the shared API keys. Nothing persists between runs. Default
+  // off keeps the resume-the-same-vault behaviour.
+  freshWallets:     optional("FRESH_WALLETS", "0") === "1",
   settleMs:         num("SETTLE_MS", "15000"),
 
   // Depositor pool. Larger than the vault's initial depositor count means the churn
@@ -85,3 +104,6 @@ export const config = {
   outDir:           optional("OUT_DIR", "/app/out"),
   stateDir:         optional("STATE_DIR", "/app/state"),
 };
+
+if (config.vaultType !== "FIV" && config.vaultType !== "PSV")
+  throw new Error(`VAULT_TYPE must be FIV or PSV (got "${config.vaultType}")`);

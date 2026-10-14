@@ -12,10 +12,10 @@ import { resolve } from "path";
 import { ethers } from "ethers";
 import { decimalToPip } from "@katanaperps/katana-perps-sdk";
 import { config } from "./config.js";
-import { loadStrategy, validateStrategy, toChainFields,
+import { loadStrategy, validateStrategy, toChainFields, toPsvChainFields,
          EXPECTED_CREATION_FEE, EXPECTED_CREATION_MINIMUM, EXPECTED_DEPOSIT_FEE } from "./strategy.js";
 import { loadManager, loadDepositorPool } from "./wallets.js";
-import { provider, ensureFunded, createVault, depositTo, readVault, existingVault, USDC_DECIMALS , rpcRetry } from "./vault.js";
+import { provider, ensureFunded, createVault, depositTo, readVault, existingVault, isPsv, USDC_DECIMALS , rpcRetry } from "./vault.js";
 import { buildClient } from "./client.js";
 import { setVaultDetails } from "./withdraw.js";
 
@@ -41,8 +41,13 @@ export async function provision() {
   log(`  ikon-vaultgen — ${strategy.display.name}  [${strategy.id}]  instance ${config.instance}`);
   log("=".repeat(74));
   log(`  profile      : ${strategy.profile}`);
-  log(`  interest     : ${strategy.vault.interestApyPct}% APY`);
-  log(`  exit thresh  : ${strategy.vault.exitMultiplier}x owed     mgr-withdraw: ${strategy.vault.managerWithdrawMultiplier}x owed`);
+  log(`  vault type   : ${config.vaultType}`);
+  if (isPsv()) {
+    log(`  carry fee    : ${strategy.vault.carryFeePct}% of profit     mgmt fee: ${strategy.vault.managementFeePct}%/yr`);
+  } else {
+    log(`  interest     : ${strategy.vault.interestApyPct}% APY`);
+    log(`  exit thresh  : ${strategy.vault.exitMultiplier}x owed     mgr-withdraw: ${strategy.vault.managerWithdrawMultiplier}x owed`);
+  }
   log(`  queue age    : ${strategy.vault.unappliedAgeS}s     maxNetDeposits: $${strategy.vault.maximumNetDeposits}`);
   log(`  wd limits    : depositor ${strategy.vault.withdrawalLimitPctDepositors}%  vault ${strategy.vault.withdrawalLimitPctVault}%`);
   log(`  churn        : ${strategy.churn.enabled ? `every ${strategy.churn.intervalHoursRange.join("-")}h per wallet` : "off"}`);
@@ -56,14 +61,23 @@ export async function provision() {
   if (!res.ok) throw new Error(`GET /exchange failed: HTTP ${res.status}`);
   const ex: any = await res.json();
   const v = ex.vaults ?? {};
+  // Pick the provider the API serves for THIS vault type. PSV lives on dev only today; on an env where
+  // it is not deployed the key is absent / ZeroAddress, and provisioning must refuse (deposits would
+  // enqueue against an unserviced provider and never apply).
+  const providerKey = isPsv() ? "profitShareVaultProviderV1ContractAddress" : "fixedIncomeVaultProviderV1ContractAddress";
+  const apiProvider: string = v[providerKey] ?? ethers.ZeroAddress;
   log(`  exchange     : ${ex.exchangeContractAddress}  chainId ${ex.chainId}`);
-  log(`  provider     : ${v.fixedIncomeVaultProviderV1ContractAddress}`);
+  log(`  provider     : ${apiProvider}  (${config.vaultType})`);
   log(`  fees         : creationMin $${v.vaultCreationMinimum}  creationFee $${v.vaultCreationFee}  depositFee $${v.vaultDepositFee}`);
 
-  if (v.fixedIncomeVaultProviderV1ContractAddress?.toLowerCase() !== config.vaultProvider.toLowerCase()) {
-    throw new Error(`VAULT_PROVIDER mismatch — env says ${config.vaultProvider}, the API serves `
-      + `${v.fixedIncomeVaultProviderV1ContractAddress}. Creating vaults on a provider the backend does not `
-      + `service means deposits enqueue and never apply. Refusing.`);
+  if (!apiProvider || apiProvider === ethers.ZeroAddress) {
+    throw new Error(`${config.vaultType} is NOT deployed on this environment — GET /exchange serves `
+      + `${providerKey}=${apiProvider || "(absent)"}. Profit-Share vaults currently exist on dev only. Refusing.`);
+  }
+  if (apiProvider.toLowerCase() !== config.vaultProvider.toLowerCase()) {
+    throw new Error(`VAULT_PROVIDER mismatch — env says ${config.vaultProvider}, the API serves ${apiProvider} `
+      + `for ${config.vaultType}. Creating vaults on a provider the backend does not service means deposits `
+      + `enqueue and never apply. Refusing.`);
   }
   if (ex.exchangeContractAddress?.toLowerCase() !== config.exchangeContract.toLowerCase()) {
     throw new Error(`EXCHANGE_CONTRACT mismatch — env ${config.exchangeContract}, API ${ex.exchangeContractAddress}. Refusing.`);
@@ -133,7 +147,7 @@ export async function provision() {
     await ensureFunded(p, managerWallet.address, config.mgrEth, String(strategy.seed.managerSeedUsd + 25));
     const live = await createVault(p, {
       manager: managerWallet, seedUsd: strategy.seed.managerSeedUsd,
-      fields: toChainFields(strategy, decimalToPip as any), log,
+      fields: (isPsv() ? toPsvChainFields : toChainFields)(strategy, decimalToPip as any), log,
     });
     if (!live) throw new Error(`vault did not go live — look for a ComposeFailed event; the seed will be in `
       + `${managerWallet.address}'s exchange balance, recoverable.`);
@@ -180,8 +194,13 @@ export async function provision() {
   log(`  numDepositorWallets : ${st.numDepositorWallets} / ${initial.length}`);
   log(`  depositorPending    : $${st.depositorPending.toFixed(2)}  (must be 0)`);
   log(`  depositorNetDeposits: $${st.depositorNetDeposits.toFixed(2)}   expected $${netOwed.toFixed(2)}`);
-  log(`  totalOwed           : $${st.totalOwed.toFixed(8)}  (≥ netDeposits by accrued interest)`);
-  log(`  Σ per-depositor − totalOwed : ${st.deltaPips} pips  (expect −(N−1)…0 from truncation)`);
+  if (isPsv()) {
+    log(`  sharePrice          : $${((st as any).sharePrice ?? 0).toFixed(8)}`);
+    log(`  vault value         : $${st.totalOwed.toFixed(8)}  (totalShares × sharePrice)`);
+  } else {
+    log(`  totalOwed           : $${st.totalOwed.toFixed(8)}  (≥ netDeposits by accrued interest)`);
+    log(`  Σ per-depositor − totalOwed : ${st.deltaPips} pips  (expect −(N−1)…0 from truncation)`);
+  }
   const conserved = Math.abs(st.depositorNetDeposits - netOwed) < 0.005;
   log(`  conservation        : ${conserved ? "✓ exact" : "✗ MISMATCH"}`);
 

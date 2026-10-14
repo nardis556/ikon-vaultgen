@@ -1,0 +1,31 @@
+# Profit-Share Vault on STAGING — SCAFFOLDED BUT GUARDED.
+# PSV is not deployed on staging today (GET /exchange serves profitShareVaultProviderV1ContractAddress
+# = ZeroAddress), so `run --rm vaultgen` will REFUSE with "PSV is NOT deployed on this environment".
+# This dir is ready to activate the moment the Profit-Share provider ships on staging: set
+# VAULT_PROVIDER in .env.STRATEGY to the live staging PSV provider and it works like the dev dir.
+services:
+  vaultgen:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file: [../.env.staging, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=provision
+    volumes:
+      - ./out:/app/out
+      - ./state:/app/state
+
+  animate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: unless-stopped
+    env_file: [../.env.staging, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=animate
+      - EXECUTE=${EXECUTE:-0}
+      - SEED_POSITIONS=${SEED_POSITIONS:-2}
+    volumes:
+      - ./out:/app/out
+      - ./state:/app/state

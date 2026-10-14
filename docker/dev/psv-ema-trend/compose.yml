@@ -1,0 +1,36 @@
+# Profit-Share Vault on DEV, FRESH-PER-RUN.
+# Unlike the FIV dirs this compose OMITS the ./.env.MANAGER + ./.env.DEPOSITORS volume mounts:
+# with FRESH_WALLETS=1 every `run --rm` mints brand-new random manager + depositor wallets, funds
+# them just-in-time from the shared funding wallet, reuses the shared API keys, and persists nothing.
+# Each provision therefore creates a NEW throwaway PSV vault.
+#   To instead run a PERSISTENT, animated PSV vault: set FRESH_WALLETS=0 in .env.STRATEGY and add the
+#   ./.env.MANAGER + ./.env.DEPOSITORS mounts back to the vaultgen + animate services (as the FIV dirs do).
+services:
+  # One-shot provisioning: mint fresh wallets, create + seed a new PSV vault. `docker compose run --rm vaultgen`.
+  vaultgen:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file: [../.env.dev, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=provision
+    volumes:
+      - ./out:/app/out
+      - ./state:/app/state
+
+  # Activity daemon. Meaningful only for a PERSISTENT vault (FRESH_WALLETS=0 + wallet mounts);
+  # with FRESH_WALLETS=1 it would mint a new vault each start, so leave it unused here.
+  animate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: unless-stopped
+    env_file: [../.env.dev, .env.STRATEGY]
+    environment:
+      - NODE_ENV=production
+      - MODE=animate
+      - EXECUTE=${EXECUTE:-0}
+      - SEED_POSITIONS=${SEED_POSITIONS:-2}
+    volumes:
+      - ./out:/app/out
+      - ./state:/app/state
