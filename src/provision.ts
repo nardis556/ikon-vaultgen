@@ -35,6 +35,13 @@ function seededAmounts(id: string, count: number, [lo, hi]: [number, number]): n
 
 export async function provision() {
   const strategy = loadStrategy(config.strategy);
+  // The env VAULT_TYPE drives encoding + state reads; the strategy file's vaultType drives validation
+  // + bounds. A mismatch validates against one type and encodes for the other → NaN config / a bad
+  // vault. Refuse up front.
+  const declaredType = strategy.vaultType ?? "FIV";
+  if (declaredType !== config.vaultType)
+    throw new Error(`VAULT_TYPE=${config.vaultType} but strategy "${strategy.id}" declares vaultType=${declaredType}. `
+      + `They must agree — set VAULT_TYPE=${declaredType} (or fix the strategy's vaultType).`);
   const warns = validateStrategy(strategy);
 
   log("=".repeat(74));

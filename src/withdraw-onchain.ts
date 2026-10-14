@@ -111,8 +111,11 @@ export async function withdrawOnChain(
 // WithdrawalFromManagedAccountByShares (verified in foundry-tests/test/psv-fork/PSVForkBase.sol).
 // As with FIV, a LOCAL by-shares withdrawal (bridgeAdapter == 0) may be submitted by the depositor
 // itself; the whitelisted dispatcher later applies it (grossQuantity = shares × price).
+// WithdrawalFromManagedAccountByShares carries an EXTRA trailing uint64 `grossQuantity` (set by the
+// dispatcher at apply) between gasFee and walletSignature — 13 fields, not 12. Omitting it yields a
+// different function selector and every call reverts.
 const PROVIDER_SHARES_ABI = [
-  "function withdrawByShares((uint128,address,address,uint64,uint64,uint64,address,bytes,address,bytes,uint64,bytes) withdrawal)",
+  "function withdrawByShares((uint128,address,address,uint64,uint64,uint64,address,bytes,address,bytes,uint64,uint64,bytes) withdrawal)",
 ];
 
 /**
@@ -166,6 +169,7 @@ export async function withdrawSharesOnChain(
     ZERO,                                     // bridgeAdapter -> local
     "0x",                                     // bridgeAdapterPayload -> local
     0n,                                       // gasFee actually charged
+    0n,                                       // grossQuantity (the dispatcher fills this = shares × price at apply)
     signature,
   ];
 

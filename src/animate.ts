@@ -42,6 +42,9 @@ async function fetchMarkets(want: string[]): Promise<MarketInfo[]> {
 
 export async function animate() {
   const strategy = loadStrategy(config.strategy);
+  const declaredType = strategy.vaultType ?? "FIV";
+  if (declaredType !== config.vaultType)
+    throw new Error(`VAULT_TYPE=${config.vaultType} but strategy "${strategy.id}" declares vaultType=${declaredType}. They must agree.`);
   const warns = validateStrategy(strategy);
   const churnOn = config.churnEnabled ?? strategy.churn.enabled;
   const mmOn = config.mmEnabled ?? strategy.marketMaking.enabled;

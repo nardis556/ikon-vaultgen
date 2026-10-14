@@ -9,8 +9,15 @@ async function main() {
       return;
     case "provision": return (await import("./provision.js")).provision();
     case "animate":   return (await import("./animate.js")).animate();
-    case "associate": return (await import("./associate.js")).associateAll();
-    case "fund":      return (await import("./fund.js")).fund();
+    // associate + fund operate on the PERSISTENT wallet pool. Under FRESH_WALLETS there is no pool
+    // (provision mints + funds fresh wallets inline each run), so they are no-ops — skip cleanly
+    // rather than minting throwaway wallets or throwing.
+    case "associate":
+      if (config.freshWallets) { console.log("FRESH_WALLETS=1: no persistent pool to associate — provision handles fresh wallets inline. Skipping."); return; }
+      return (await import("./associate.js")).associateAll();
+    case "fund":
+      if (config.freshWallets) { console.log("FRESH_WALLETS=1: no persistent pool to pre-fund — provision funds fresh wallets inline. Skipping."); return; }
+      return (await import("./fund.js")).fund();
     default: throw new Error(`Unknown MODE "${config.mode}" (associate | fund | provision | animate | list)`);
   }
 }

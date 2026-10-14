@@ -93,6 +93,9 @@ export function loadManager(generate: boolean): { signer: Signer; created: boole
   // Fresh-per-run: mint a brand-new random manager, attach the shared API credentials from env, and
   // persist nothing — so `docker compose run --rm` leaves no wallet behind.
   if (config.freshWallets) {
+    if (!config.managerApiKey || !config.managerApiSecret)
+      console.warn("[wallets] FRESH_WALLETS=1 but MANAGER_API_KEY/MANAGER_API_SECRET are blank — "
+        + "setVaultDetails and market-making will be unavailable for this fresh manager.");
     const w = ethers.Wallet.createRandom();
     return { signer: { name: "MANAGER", address: w.address, privateKey: w.privateKey,
              apiKey: config.managerApiKey || undefined, apiSecret: config.managerApiSecret || undefined }, created: true };

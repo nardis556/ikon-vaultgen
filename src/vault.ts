@@ -83,6 +83,9 @@ const adapterFor = (signer: ethers.Wallet) =>
 export const PSV_VAULT_ABI = [
   "function loadVaultSummary(address) view returns ((bool,bool,bool,(address,uint64,uint64,uint64,uint64,uint64,uint64),uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64))",
   "function loadVaultBalanceForWallet(address,address) view returns ((uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64))",
+  // Summary view that NETS the withdrawal-limit windows: [0] costBasis [2] pendingDeposit
+  // [3] sharesAvailableToWithdraw (window-netted) [4] sharesLockedForWithdrawal [5] totalShares.
+  "function loadVaultBalanceForWalletSummary(address,address) view returns ((uint64,uint64,uint64,uint64,uint64,uint64,uint64))",
   "function loadSharePrice(address) view returns (uint64)",
   "function loadVaultWithdrawQueueLength(address) view returns (uint256)",
 ];
@@ -266,14 +269,15 @@ export async function vaultBalance(p: ethers.JsonRpcProvider, managerAddr: strin
   const vp = new ethers.Contract(config.vaultProvider, abiFor(), p) as any;
   try {
     if (isPsv()) {
-      // PSV: a wallet holds shares; value = shares × sharePrice. No locked/owed; map owed→value so
-      // downstream reporting/churn reads one field. loadVaultBalanceForWallet: [0] costBasis [3] pending [5] shares.
-      const b = await rpcRetry("loadVaultBalance", () => vp.loadVaultBalanceForWallet(managerAddr, wallet));
+      // PSV: a wallet holds shares; value = shares × sharePrice. Use the SUMMARY view so
+      // availableToWithdraw is NETTED by the withdrawal-limit windows (churn/decide treat it as
+      // authoritative — the full position value would make churn oversize and revert).
+      // [0] costBasis [2] pendingDeposit [3] sharesAvailableToWithdraw [4] sharesLocked [5] totalShares.
+      const b = await rpcRetry("loadVaultBalance", () => vp.loadVaultBalanceForWalletSummary(managerAddr, wallet));
       const price = Number(await rpcRetry("loadSharePrice", () => vp.loadSharePrice(managerAddr))) / PIPS;
-      const value = (Number(b[5]) / PIPS) * price;
       return {
-        costBasis: Number(b[0]) / PIPS, locked: 0, owed: value,
-        pendingDeposit: Number(b[3]) / PIPS, availableToWithdraw: value,
+        costBasis: Number(b[0]) / PIPS, locked: Number(b[4]) / PIPS, owed: (Number(b[5]) / PIPS) * price,
+        pendingDeposit: Number(b[2]) / PIPS, availableToWithdraw: (Number(b[3]) / PIPS) * price,
       };
     }
     const b = await rpcRetry("loadVaultBalance", () => vp.loadVaultBalanceForWalletSummary(managerAddr, wallet));

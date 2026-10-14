@@ -9,7 +9,10 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 EXECUTE="${EXECUTE:-0}"
-DIRS=(ema-trend psv-ema-trend)
+# psv-ema-trend is intentionally NOT here: it is FRESH_WALLETS=1 (provision-only, one throwaway vault
+# per run). Animating it would mint a vault-less fresh manager each start and restart-loop. To animate
+# a PERSISTENT PSV vault, set FRESH_WALLETS=0 + restore the wallet mounts in its compose.yml, then add it.
+DIRS=(ema-trend)
 
 [ -f .env.dev ] || { echo "✗ .env.dev missing"; exit 1; }
 
