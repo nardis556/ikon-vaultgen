@@ -1,10 +1,13 @@
 services:
   # One-shot provisioning job. Run with `docker compose run --rm vaultgen`.
   vaultgen:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.dev, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=provision
@@ -16,10 +19,13 @@ services:
       - ./state:/app/state
 
   animate:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: unless-stopped
-    env_file: [../.env.dev, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=animate
@@ -32,10 +38,13 @@ services:
       - ./state:/app/state
 
   associate:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.dev, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=associate
@@ -46,10 +55,13 @@ services:
       - ./state:/app/state
 
   fund:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.dev, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=fund

@@ -12,7 +12,7 @@ import { resolve } from "path";
 import { ethers } from "ethers";
 import { decimalToPip } from "@katanaperps/katana-perps-sdk";
 import { config } from "./config.js";
-import { loadStrategy, validateStrategy, toChainFields, toPsvChainFields,
+import { loadStrategy, validateStrategy, toChainFields, toPsvChainFields, vaultDisplayName,
          EXPECTED_CREATION_FEE, EXPECTED_CREATION_MINIMUM, EXPECTED_DEPOSIT_FEE } from "./strategy.js";
 import { loadManager, loadDepositorPool } from "./wallets.js";
 import { provider, ensureFunded, createVault, depositTo, readVault, existingVault, isPsv, USDC_DECIMALS , rpcRetry } from "./vault.js";
@@ -43,9 +43,10 @@ export async function provision() {
     throw new Error(`VAULT_TYPE=${config.vaultType} but strategy "${strategy.id}" declares vaultType=${declaredType}. `
       + `They must agree — set VAULT_TYPE=${declaredType} (or fix the strategy's vaultType).`);
   const warns = validateStrategy(strategy);
+  const vaultName = vaultDisplayName(strategy, config.vaultNamePrefix);
 
   log("=".repeat(74));
-  log(`  ikon-vaultgen — ${strategy.display.name}  [${strategy.id}]  instance ${config.instance}`);
+  log(`  ikon-vaultgen — ${vaultName}  [${strategy.id}]  instance ${config.instance}`);
   log("=".repeat(74));
   log(`  profile      : ${strategy.profile}`);
   log(`  vault type   : ${config.vaultType}`);
@@ -165,8 +166,8 @@ export async function provision() {
   if (config.setDetails && mgr.apiKey && mgr.apiSecret) {
     try {
       await setVaultDetails(buildClient(mgr.apiKey, mgr.apiSecret, mgr.privateKey),
-        strategy.display.name, strategy.display.description);
-      log(`  ✓ details set: "${strategy.display.name}" (${strategy.display.description.length} char description)`);
+        vaultName, strategy.display.description);
+      log(`  ✓ details set: "${vaultName}" (${strategy.display.description.length} char description)`);
     } catch (e: any) {
       log(`  ! setVaultDetails failed: ${String(e?.message ?? e).slice(0, 140)}`);
       log(`    vault is live regardless — rerun with credentials to set details later`);
@@ -215,7 +216,7 @@ export async function provision() {
   const outFile = resolve(config.outDir, `${strategy.id}-${config.instance}.json`);
   writeFileSync(outFile, JSON.stringify({
     strategy: strategy.id, profile: strategy.profile, instance: config.instance,
-    name: strategy.display.name, manager: managerWallet.address,
+    name: vaultName, manager: managerWallet.address,
     provider: config.vaultProvider, exchange: config.exchangeContract,
     seedUsd: strategy.seed.managerSeedUsd,
     depositors: initial.map((d, i) => ({ address: d.address, amountUsd: amounts[i] })),

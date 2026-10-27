@@ -17,6 +17,7 @@ strategies/            one JSON per strategy — the single source of truth for 
 src/                   provisioner + daemon
 docker/sandbox/
   .env.sandbox         shared connection + funding key      (gitignored)
+  .env                 optional generic overrides, e.g. a keyed RPC_URL (gitignored)
   <strategy>/
     compose.yml        two services: vaultgen (one-shot), animate (daemon)
     .env.STRATEGY      strategy selection + run knobs       (committed — no secrets)
@@ -25,6 +26,11 @@ docker/sandbox/
     out/  state/       run summaries, churn schedules
   start.sh  animate.sh  stop.sh
 ```
+
+Each container reads `../.env.<env>`, then `../.env`, then `.env.STRATEGY` — later files win. The plain
+`.env` is the generic per-deployment file, the same role as loadgen's `.env`; either env-level file may be
+used alone. Machine-local settings that apply to every strategy in an env (a keyed RPC URL, a corrected
+API key) belong there.
 
 ## Why the strategy is one file
 
@@ -104,6 +110,15 @@ vault already exists it skips creation and only seeds depositors that are not al
 not cosmetic — a second `addManagedAccount` for the same manager reverts `Duplicate` *inside* the
 compose call, which does not throw. The adapter would re-credit the seed to the manager's exchange
 balance and emit `ComposeFailed`, so a naive re-run silently costs another seed and creates nothing.
+
+**Signed creation.** The providers deployed on 2026-10-20 (dev FIV `0xC1e94AD0…`, PSV `0x7C730959…`)
+create a vault only if the manager wallet signed its configuration: EIP-712 over the provider's
+`VaultConfigurationFields`, with the payload `abi.encode(config, signature)` instead of
+`abi.encode(config)`. Provisioning signs when the provider exposes `eip712Domain()` (the earlier
+providers do not) and then dry-runs `addManagedAccount` as the deposit adapter before paying the
+seed, so a refused config or signature stops with the error name and nothing sent. The new PSV also
+added `exchangeCarryFeeMultiplier` to `loadVaultSummary`, shifting every later field; vaultgen reads
+that summary by field name for either layout.
 Bump `INSTANCE` to deliberately create a second vault.
 
 ## Strategies
@@ -205,6 +220,20 @@ Quotes are **post-only** (`gtx`). A maker that crosses is not earning spread, it
 without `gtx` an aggressively skewed near-side quote would sometimes take. At `skewStrength > 0.9`
 the validator warns, because at full skew the reducing side quotes essentially at index and stops
 being market making.
+
+The ladder is centred on index, but the book may not be. A quote that would cross the best resting
+order on the other side (read after cancelling our own) is moved to one tick inside it, levels a
+tick apart, instead of being sent and cancelled by `gtx`. On dev in October 2026 a stopped loadgen
+left its book about 3.5 % below index, so every bid crossed and the vaults quoted one side only.
+
+**Taker trades** (`TAKER_EVERY_S`, default 0 = off). A post-only ladder fills only when someone else
+crosses it, and on a quiet book nobody does. With this set, every N seconds the daemon also sends one
+market order per market (one `quoteNotionalUsd` clip): with the strategy's signal until the position
+reaches `maxPositionUsd`, then one clip back, so at the cap it alternates trim and re-add. A position
+against the signal is reduced first; with no signal it is worked back toward flat. It runs between
+the cancel and the new ladder, so it never meets the vault's own quotes. Vaults whose managers sit in
+the same API account may not fill each other (account-level self-trade prevention), so spread the
+managers of vaults on the same markets across accounts.
 
 Market making needs manager API credentials; without them the daemon says so and runs churn only.
 

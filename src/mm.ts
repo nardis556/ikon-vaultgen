@@ -20,6 +20,11 @@
  *
  * Quotes are post-only (gtx). A maker that crosses is not earning spread, it is paying it; without
  * gtx an aggressively skewed near-side quote would sometimes take.
+ *
+ * The ladder is centred on index, but the book may not be: on dev the resting orders of a stopped
+ * loadgen sat ~3.5% below index for days. Every bid then crossed those asks and gtx cancelled it,
+ * so the vault quoted one side only and never traded. A quote that would cross the opposite best
+ * is therefore moved to one tick inside it (levels stay a tick apart) instead of being thrown away.
  */
 import * as kperps from "@katanaperps/katana-perps-sdk";
 import BigNumber from "bignumber.js";
@@ -45,6 +50,8 @@ function snap(value: number, tickSize: string, side: "buy" | "sell"): string {
 }
 
 export interface Quote { market: string; side: "buy" | "sell"; price: string; quantity: string; }
+/** Best bid / ask of the OTHER resting orders (read after cancelling our own). */
+export interface BookTop { bid?: number; ask?: number; }
 
 /**
  * Build one market's two-sided, inventory-skewed ladder.
@@ -52,7 +59,7 @@ export interface Quote { market: string; side: "buy" | "sell"; price: string; qu
  * @param netPosition signed position in BASE units (negative = short)
  */
 export function buildSkewedQuotes(
-  m: MarketInfo, cfg: MarketMakingConfig, netPosition: number,
+  m: MarketInfo, cfg: MarketMakingConfig, netPosition: number, book: BookTop = {},
 ): { quotes: Quote[]; r: number; note: string } {
   const maxQty = cfg.maxPositionUsd / m.indexPrice;
   // r: how far inventory sits from the limit. Clamped so a position that overshot the cap
@@ -73,17 +80,25 @@ export function buildSkewedQuotes(
   const step = (m.indexPrice * cfg.priceRangePct) / cfg.ordersPerSide;
   const baseQty = Math.max(m.takerOrderMinimum, cfg.quoteNotionalUsd / m.indexPrice);
   const quotes: Quote[] = [];
+  const tick = Number(m.tickSize);
+  let clamped = 0;
 
   for (const side of ["buy", "sell"] as const) {
     const mult = side === "buy" ? buyMult : sellMult;
     const sizeMult = side === "buy" ? buySizeMult : sellSizeMult;
     // A fully-skewed reducing side (k=1, |r|=1) would collapse to offset 0 = quoting AT index,
     // which gtx would simply reject. Keep at least one tick of separation.
-    const minOff = Number(m.tickSize);
+    const minOff = tick;
+    // The tightest price this side may use without crossing the book; it moves a tick further out
+    // after every level so clamped levels stay distinct.
+    let bound = side === "buy" ? (book.ask ?? Infinity) - tick : (book.bid ?? -Infinity) + tick;
     for (let i = 0; i < cfg.ordersPerSide; i++) {
       const off = Math.max(minOff, step * (i + 1) * mult);
       const raw = side === "buy" ? m.indexPrice - off : m.indexPrice + off;
-      const price = snap(raw, m.tickSize, side);
+      let price = snap(raw, m.tickSize, side);
+      if (side === "buy" ? Number(price) > bound : Number(price) < bound) { price = snap(bound, m.tickSize, side); clamped++; }
+      if (Number(price) <= 0) continue;
+      bound = side === "buy" ? Number(price) - tick : Number(price) + tick;
       // Never quote through index — that is a taker in maker's clothing.
       if (side === "buy" && Number(price) >= m.indexPrice) continue;
       if (side === "sell" && Number(price) <= m.indexPrice) continue;
@@ -93,7 +108,8 @@ export function buildSkewedQuotes(
   }
 
   const note = `net=${netPosition.toFixed(6)} r=${r.toFixed(3)} `
-    + `${long ? "LONG" : r < 0 ? "SHORT" : "flat"} → buyOffset x${buyMult.toFixed(2)} sellOffset x${sellMult.toFixed(2)}`;
+    + `${long ? "LONG" : r < 0 ? "SHORT" : "flat"} → buyOffset x${buyMult.toFixed(2)} sellOffset x${sellMult.toFixed(2)}`
+    + (clamped ? `  (${clamped} held inside the book: bid ${book.bid ?? "-"} / ask ${book.ask ?? "-"})` : "");
   return { quotes, r, note };
 }
 
@@ -166,6 +182,62 @@ export async function openSeedPositions(
   return opened;
 }
 
+/**
+ * One small market order toward the strategy's signal, so the vault keeps trading even when nobody
+ * crosses its post-only ladder (on a quiet book, nobody does, and the vault shows quotes but no
+ * trades). One clip (quoteNotionalUsd) in the signal's direction until the position reaches
+ * maxPositionUsd, then one clip back, so at the cap it alternates trim and re-add rather than going
+ * quiet. A position against the signal is reduced first; with no signal it is worked back toward
+ * flat. Returns the signed base quantity it sent (0 when it sent nothing).
+ */
+export async function takeSignalTrade(
+  client: Client, m: MarketInfo, cfg: MarketMakingConfig, netPosition: number, bias: number,
+  log: (msg: string) => void, dryRun: boolean,
+): Promise<number> {
+  const clip = Number(snapQty(cfg.quoteNotionalUsd / m.indexPrice, m.stepSize, m.takerOrderMinimum));
+  const dir = Math.sign(bias);
+  let side: "buy" | "sell", qty = clip, why: string;
+  if (dir === 0) {
+    if (Math.abs(netPosition) < clip) return 0;
+    side = netPosition > 0 ? "sell" : "buy"; why = "no signal, working the position toward flat";
+  } else if (netPosition * dir < 0) {
+    side = dir > 0 ? "buy" : "sell"; why = "against the signal, reducing";
+    qty = Math.min(clip, Math.abs(netPosition));
+  } else if ((Math.abs(netPosition) + clip) * m.indexPrice <= cfg.maxPositionUsd) {
+    side = dir > 0 ? "buy" : "sell"; why = "adding with the signal";
+  } else {
+    side = dir > 0 ? "sell" : "buy"; why = `at the $${cfg.maxPositionUsd} cap, trimming`;
+  }
+  const quantity = snapQty(qty, m.stepSize, m.takerOrderMinimum);
+  if (dryRun) { log(`    · would ${side} ${quantity} ${m.market} at market (${why})`); return 0; }
+  try {
+    await (client.auth as any).createOrder({
+      nonce: client.nonce(), wallet: client.wallet, market: m.market,
+      side: side === "buy" ? kperps.OrderSide.buy : kperps.OrderSide.sell,
+      type: kperps.OrderType.market, quantity,
+      // Self-trade prevention is per API ACCOUNT. With the default (dc) a market order that meets a
+      // resting order of any wallet in the same account is decremented with no trade — on dev that
+      // ate most fills, because an abandoned loadgen's orders sit in the same accounts. Cancel-oldest
+      // removes that resting order and keeps matching.
+      selfTradePrevention: kperps.SelfTradePrevention.co,
+    });
+    log(`    ✓ took ${side} ${quantity} ${m.market} at market (${why})`);
+    return (side === "buy" ? 1 : -1) * Number(quantity);
+  } catch (e: any) {
+    const why2 = e?.response?.data?.message ?? e?.response?.data?.code ?? e?.message ?? String(e);
+    log(`    ✗ ${m.market} taker ${side} ${quantity}: ${String(why2).slice(0, 110)}`);
+    return 0;
+  }
+}
+
+/** Best resting bid / ask on a market, or {} when the read fails or a side is empty. */
+async function fetchBookTop(client: Client, market: string): Promise<BookTop> {
+  try {
+    const ob: any = await (client.public as any).getOrderBookLevel1({ market });
+    return { bid: ob?.bids?.[0] ? Number(ob.bids[0][0]) : undefined, ask: ob?.asks?.[0] ? Number(ob.asks[0][0]) : undefined };
+  } catch { return {}; }
+}
+
 /** Net signed base position per market for a wallet, from one getWallets call. */
 export async function fetchNetPositions(client: Client): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
@@ -180,19 +252,25 @@ export async function fetchNetPositions(client: Client): Promise<Record<string, 
   return out;
 }
 
-/** Replace this market's quotes: cancel, then place the freshly skewed ladder. */
+/**
+ * Replace this market's quotes: cancel, optionally take one signal trade (`taker`, between the
+ * cancel and the new ladder so it can never meet our own quotes), then place the freshly skewed
+ * ladder against the book as it stands without our orders.
+ */
 export async function requoteMarket(
   client: Client, m: MarketInfo, cfg: MarketMakingConfig, netPosition: number,
-  log: (msg: string) => void, dryRun: boolean,
+  log: (msg: string) => void, dryRun: boolean, taker?: { bias: number },
 ): Promise<number> {
-  const { quotes, note } = buildSkewedQuotes(m, cfg, netPosition);
+  if (!dryRun) await (client.auth as any).cancelOrders({ nonce: client.nonce(), wallet: client.wallet, market: m.market });
+  if (taker) netPosition += await takeSignalTrade(client, m, cfg, netPosition, taker.bias, log, dryRun);
+  const book = await fetchBookTop(client, m.market);
+  const { quotes, note } = buildSkewedQuotes(m, cfg, netPosition, book);
   log(`    ${m.market.padEnd(9)} idx=${m.indexPrice}  ${note}  quotes=${quotes.length}`);
   if (dryRun) {
     for (const q of quotes.slice(0, 4)) log(`      ${q.side.padEnd(4)} ${q.price} x ${q.quantity}`);
     if (quotes.length > 4) log(`      … +${quotes.length - 4} more`);
     return 0;
   }
-  await (client.auth as any).cancelOrders({ nonce: client.nonce(), wallet: client.wallet, market: m.market });
   let placed = 0;
   for (const q of quotes) {
     try {

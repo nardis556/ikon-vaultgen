@@ -8,10 +8,13 @@
 services:
   # One-shot provisioning: mint fresh wallets, create + seed a new PSV vault. `docker compose run --rm vaultgen`.
   vaultgen:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.dev, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=provision
@@ -22,10 +25,13 @@ services:
   # Activity daemon. Meaningful only for a PERSISTENT vault (FRESH_WALLETS=0 + wallet mounts);
   # with FRESH_WALLETS=1 it would mint a new vault each start, so leave it unused here.
   animate:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: unless-stopped
-    env_file: [../.env.dev, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=animate

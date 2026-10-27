@@ -12,9 +12,10 @@ EXECUTE="${EXECUTE:-0}"
 # psv-ema-trend is intentionally NOT here: it is FRESH_WALLETS=1 (provision-only, one throwaway vault
 # per run). Animating it would mint a vault-less fresh manager each start and restart-loop. To animate
 # a PERSISTENT PSV vault, set FRESH_WALLETS=0 + restore the wallet mounts in its compose.yml, then add it.
-DIRS=(ema-trend)
+# gold-trend is omitted on dev: it trades XAU-USD only, which dev does not list.
+DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade psv-rsi-pullback psv-macd-crossover psv-donchian-breakout psv-market-making psv-bollinger-fade)
 
-[ -f .env.dev ] || { echo "✗ .env.dev missing"; exit 1; }
+[ -f .env ] || [ -f .env.dev ] || { echo "✗ no .env or .env.dev"; exit 1; }
 
 if [ "${1:-}" = "--logs" ]; then
   for d in "${DIRS[@]}"; do
@@ -34,7 +35,10 @@ fi
 
 for d in "${DIRS[@]}"; do
   echo "═══ ${d} ═══"
-  ( cd "$d" && docker compose -p "vgdev-${d}" pull -q 2>/dev/null ) || echo "  ! pull failed — using cached image"
+  # The dev composes run the locally built ikon-vaultgen:local (nothing to pull); pull registry images only.
+  if grep -q 'image: ghcr' "$d/compose.yml"; then
+    ( cd "$d" && docker compose -p "vgdev-${d}" pull -q 2>/dev/null ) || echo "  ! pull failed — using cached image"
+  fi
   if [ "$EXECUTE" = "1" ]; then
     ( cd "$d" && EXECUTE=1 docker compose -p "vgdev-${d}" up -d --no-deps animate ) && echo "  ✓ daemon up (EXECUTE=1)"
   else

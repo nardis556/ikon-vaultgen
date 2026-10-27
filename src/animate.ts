@@ -55,6 +55,7 @@ export async function animate() {
   log(`  churn        : ${churnOn ? `on, every ${strategy.churn.intervalHoursRange.join("-")}h per wallet` : "off"}`);
   log(`  market making: ${mmOn ? `on, ${strategy.marketMaking.markets.join(", ")} `
       + `skew=${strategy.marketMaking.skewStrength} maxPos=$${strategy.marketMaking.maxPositionUsd}` : "off"}`);
+  log(`  taker trades : ${config.takerEverySeconds > 0 ? `one clip per market toward the signal every ${config.takerEverySeconds}s` : "off"}`);
   log(`  time scale   : ${config.timeScale}x${config.timeScale !== 1 ? "  (schedule compressed; interest still real-time)" : ""}`);
   log(`  mode         : ${config.execute ? "LIVE" : "DRY-RUN — nothing will be sent"}`);
   for (const w of warns) log(`  ⚠ ${w}`);
@@ -79,6 +80,7 @@ export async function animate() {
   }
 
   let lastMm = 0;
+  let lastTaker = 0;
   let seeded = false;
   for (;;) {
     const now = Date.now();
@@ -152,9 +154,12 @@ export async function animate() {
           seeded = true;
         }
 
-        log(`  market making:`);
+        const takeNow = config.takerEverySeconds > 0 && now - lastTaker >= config.takerEverySeconds * 1000;
+        if (takeNow) lastTaker = now;
+        log(`  market making${takeNow ? " + signal trade" : ""}:`);
         for (const m of markets) {
-          await requoteMarket(mmClient, m, strategy.marketMaking, positions[m.market] ?? 0, log, !config.execute);
+          await requoteMarket(mmClient, m, strategy.marketMaking, positions[m.market] ?? 0, log, !config.execute,
+            takeNow ? { bias: bias[m.market] ?? 0 } : undefined);
         }
       }
 

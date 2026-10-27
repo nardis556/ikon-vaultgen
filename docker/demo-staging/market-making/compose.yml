@@ -5,7 +5,10 @@ services:
     image: ghcr.io/nardis556/ikon-vaultgen:latest
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.demo-staging, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.demo-staging, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment: [NODE_ENV=production, MODE=provision]
     volumes: &m
       - ./.env.MANAGER:/app/.env.MANAGER
@@ -18,7 +21,10 @@ services:
     image: ghcr.io/nardis556/ikon-vaultgen:latest
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.demo-staging, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.demo-staging, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment: [NODE_ENV=production, MODE=fund]
     volumes: *m
 
@@ -27,7 +33,10 @@ services:
     image: ghcr.io/nardis556/ikon-vaultgen:latest
     pull_policy: missing
     restart: unless-stopped
-    env_file: [../.env.demo-staging, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.demo-staging, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=animate
@@ -43,7 +52,10 @@ services:
     image: ghcr.io/nardis556/ikon-vaultgen:latest
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.demo-staging, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.demo-staging, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=associate

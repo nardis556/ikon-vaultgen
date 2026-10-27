@@ -1,0 +1,66 @@
+{
+  "id": "psv-donchian-breakout",
+  "vaultType": "PSV",
+  "display": {
+    "name": "PSV Donchian Breakout",
+    "description": "this is the risky one. read the parameters.\n\nthe profit-share version: no promised interest. depositors buy shares, and their value floats with the strategy's pnl. the manager takes a 25% carry on profit when shares are withdrawn, plus a 3%/yr management fee that accrues continuously. buy while the share price is low and you get more shares.",
+    "x": null
+  },
+  "profile": "profit-share",
+  "vault": {
+    "carryFeePct": 25,
+    "managementFeePct": 3,
+    "maximumNetDeposits": 6000,
+    "unappliedAgeS": 3600,
+    "withdrawalLimitPctDepositors": 25,
+    "withdrawalLimitPctVault": 15
+  },
+  "seed": {
+    "managerSeedUsd": 150
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      150,
+      260
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      18,
+      36
+    ],
+    "depositPctOfBalanceRange": [
+      5,
+      20
+    ],
+    "withdrawPctOfBalanceRange": [
+      5,
+      18
+    ],
+    "depositWeight": 50,
+    "withdrawWeight": 50
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "BTC-USD",
+      "ETH-USD",
+      "SOL-USD"
+    ],
+    "ordersPerSide": 6,
+    "priceRangePct": 0.01,
+    "skewStrength": 0.35,
+    "maxPositionUsd": 800,
+    "refreshSeconds": 30,
+    "quoteNotionalUsd": 250
+  },
+  "signal": {
+    "kind": "donchian",
+    "interval": "15m",
+    "period": 20,
+    "atrPeriod": 14,
+    "atrMult": 0.25
+  }
+}

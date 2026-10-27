@@ -8,7 +8,10 @@ services:
     image: ghcr.io/nardis556/ikon-vaultgen:latest
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.sandbox, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.sandbox, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=provision
@@ -20,7 +23,10 @@ services:
     image: ghcr.io/nardis556/ikon-vaultgen:latest
     pull_policy: missing
     restart: unless-stopped
-    env_file: [../.env.sandbox, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.sandbox, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=animate

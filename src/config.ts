@@ -74,6 +74,9 @@ export const config = {
   mode:             optional("MODE", "provision"),   // provision | animate | list
   execute:          optional("EXECUTE", "0") === "1",
   setDetails:       optional("SET_DETAILS", "1") === "1",
+  // Prepended to the strategy's display name, e.g. "sb" → "sb EMA 50/200 Trend", so one env's
+  // vaults are easy to tell apart in the UI. Must still fit the 30-char name limit.
+  vaultNamePrefix:  optional("VAULT_NAME_PREFIX", "").trim(),
   generateWallets:  optional("GENERATE_WALLETS", "1") === "1",
   // Fresh-per-run: when set, every run mints BRAND-NEW random manager + depositor wallets
   // (never resumes the ones in .env.MANAGER/.env.DEPOSITORS), funds them just-in-time from the
@@ -100,6 +103,10 @@ export const config = {
   // inventory skew observable: a flat book quotes symmetrically, so there is nothing to see
   // until inventory exists. 0 disables.
   seedPositions:    num("SEED_POSITIONS", "0"),
+  // Every TAKER_EVERY_S seconds, take one small market order per market toward the strategy's
+  // signal (see mm.ts takeSignalTrade), so the vault keeps trading on a book nobody else is
+  // crossing. Seeding opens positions once; this keeps fills coming. 0 disables.
+  takerEverySeconds: num("TAKER_EVERY_S", "0"),
 
   outDir:           optional("OUT_DIR", "/app/out"),
   stateDir:         optional("STATE_DIR", "/app/state"),

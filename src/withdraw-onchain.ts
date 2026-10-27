@@ -133,7 +133,9 @@ export async function withdrawSharesOnChain(
   shares: number,
   minimumQuantityUsd: number,
 ): Promise<string> {
-  const sh = Math.round(shares * 100) / 100;
+  // Full 8-dp share precision, rounded DOWN so a request sized at the available shares never
+  // exceeds them (the caller keeps a margin above the signed floor, so one pip less is harmless).
+  const sh = Math.floor(shares * 1e8 + 1e-6) / 1e8;
   const minQty = Math.max(1, Math.round(minimumQuantityUsd * 100) / 100); // MINIMUM_WITHDRAWAL_QUANTITY = $1
   const nonce = uuidv1();
   const maximumGasFee = MINIMUM_MAXIMUM_GAS_FEE;

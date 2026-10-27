@@ -104,6 +104,15 @@ export function loadStrategy(id: string): Strategy {
 }
 
 /** Throws on anything the chain would reject; returns non-fatal warnings. */
+/** The on-exchange vault name: `prefix display.name`, or just display.name when prefix is blank. */
+export function vaultDisplayName(s: Strategy, prefix: string): string {
+  const name = prefix ? `${prefix} ${s.display.name}` : s.display.name;
+  if (name.length > VAULT_NAME_CHARACTER_LIMIT)
+    throw new Error(`vault name "${name}" is ${name.length} chars — max ${VAULT_NAME_CHARACTER_LIMIT}. `
+      + `Shorten VAULT_NAME_PREFIX or display.name.`);
+  return name;
+}
+
 export function validateStrategy(s: Strategy): string[] {
   const errs: string[] = [];
   const warns: string[] = [];

@@ -1,0 +1,63 @@
+{
+  "id": "psv-bollinger-fade",
+  "vaultType": "PSV",
+  "display": {
+    "name": "PSV Bollinger Fade",
+    "description": "bollinger(20, 2σ) on 5m sol. close above the upper band we sell it, below the lower we buy it, inside the bands we hold nothing and quote.\n\nthe profit-share version: no promised interest. depositors buy shares, and their value floats with the strategy's pnl. the manager takes a 10% carry on profit when shares are withdrawn, plus a 1%/yr management fee that accrues continuously. buy while the share price is low and you get more shares.",
+    "x": null
+  },
+  "profile": "profit-share",
+  "vault": {
+    "carryFeePct": 10,
+    "managementFeePct": 1,
+    "maximumNetDeposits": 1000,
+    "unappliedAgeS": 86400,
+    "withdrawalLimitPctDepositors": 100,
+    "withdrawalLimitPctVault": 100
+  },
+  "seed": {
+    "managerSeedUsd": 300
+  },
+  "depositors": {
+    "count": 10,
+    "amountUsdRange": [
+      10,
+      25
+    ]
+  },
+  "churn": {
+    "enabled": true,
+    "intervalHoursRange": [
+      24,
+      48
+    ],
+    "depositPctOfBalanceRange": [
+      6,
+      25
+    ],
+    "withdrawPctOfBalanceRange": [
+      5,
+      20
+    ],
+    "depositWeight": 55,
+    "withdrawWeight": 45
+  },
+  "marketMaking": {
+    "enabled": true,
+    "markets": [
+      "SOL-USD"
+    ],
+    "ordersPerSide": 3,
+    "priceRangePct": 0.004,
+    "skewStrength": 0.5,
+    "maxPositionUsd": 900,
+    "refreshSeconds": 45,
+    "quoteNotionalUsd": 120
+  },
+  "signal": {
+    "kind": "bollinger",
+    "interval": "5m",
+    "period": 20,
+    "stddev": 2
+  }
+}

@@ -3,10 +3,13 @@ services:
   # NOT a service to `up` — restart:"no" because re-running on every container
   # restart would try to re-provision.
   vaultgen:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.sandbox, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.sandbox, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=provision
@@ -21,10 +24,13 @@ services:
   # Long-running activity daemon: depositor churn + inventory-skewed market making.
   # Started separately (./animate.sh) once the vault is provisioned.
   animate:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: unless-stopped
-    env_file: [../.env.sandbox, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.sandbox, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=animate
@@ -45,10 +51,13 @@ services:
   # .env.MANAGER / .env.DEPOSITORS. A wallet must be associated before the exchange
   # will surface a balance for it, so run this before provisioning.
   associate:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.sandbox, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.sandbox, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=associate
@@ -60,10 +69,13 @@ services:
 
   # One-shot: pre-fund the deterministic pool so provisioning has no funding step mid-flow.
   fund:
-    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    image: ikon-vaultgen:local
     pull_policy: missing
     restart: "no"
-    env_file: [../.env.sandbox, .env.STRATEGY]
+    env_file:
+      - { path: ../.env.sandbox, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
     environment:
       - NODE_ENV=production
       - MODE=fund

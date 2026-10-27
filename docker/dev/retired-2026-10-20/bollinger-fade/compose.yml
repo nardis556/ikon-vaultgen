@@ -1,0 +1,72 @@
+services:
+  # One-shot provisioning job. Run with `docker compose run --rm vaultgen`.
+  vaultgen:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
+    environment:
+      - NODE_ENV=production
+      - MODE=provision
+    volumes:
+      # Wallet material persists on the host so a re-run resumes the SAME vault.
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state
+
+  animate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: unless-stopped
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
+    environment:
+      - NODE_ENV=production
+      - MODE=animate
+      - EXECUTE=${EXECUTE:-0}
+      - SEED_POSITIONS=${SEED_POSITIONS:-2}
+    volumes:
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state
+
+  associate:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
+    environment:
+      - NODE_ENV=production
+      - MODE=associate
+    volumes:
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state
+
+  fund:
+    image: ghcr.io/nardis556/ikon-vaultgen:latest
+    pull_policy: missing
+    restart: "no"
+    env_file:
+      - { path: ../.env.dev, required: false }
+      - { path: ../.env, required: false }
+      - .env.STRATEGY
+    environment:
+      - NODE_ENV=production
+      - MODE=fund
+    volumes:
+      - ./.env.MANAGER:/app/.env.MANAGER
+      - ./.env.DEPOSITORS:/app/.env.DEPOSITORS
+      - ./out:/app/out
+      - ./state:/app/state

@@ -11,8 +11,8 @@ set -uo pipefail
 cd "$(dirname "$0")"
 PREFIX=vgstg
 EXECUTE="${EXECUTE:-0}"
-DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade gold-trend psv-ema-trend)
-[ -f .env.staging ] || { echo "✗ .env.staging missing"; exit 1; }
+DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade gold-trend)
+[ -f .env ] || [ -f .env.staging ] || { echo "✗ no .env or .env.staging"; exit 1; }
 if [ "$#" -gt 0 ]; then
   SEL=(); for w in "$@"; do for d in "${DIRS[@]}"; do [ "$d" = "$w" ] && SEL+=("$d"); done; done
   [ "${#SEL[@]}" -gt 0 ] || { echo "no match: $*"; echo "available: ${DIRS[*]}"; exit 1; }

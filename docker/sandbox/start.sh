@@ -12,9 +12,9 @@ set -uo pipefail
 cd "$(dirname "$0")"
 PREFIX=vg
 EXECUTE="${EXECUTE:-0}"
-DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade psv-ema-trend)
+DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade)
 
-[ -f .env.sandbox ] || { echo "✗ .env.sandbox missing — copy .env.sandbox.example and fill in FUNDING_WALLET_KEY"; exit 1; }
+[ -f .env ] || [ -f .env.sandbox ] || { echo "✗ no .env or .env.sandbox — copy .env.sandbox.example and fill in FUNDING_WALLET_KEY"; exit 1; }
 
 if [ "$#" -gt 0 ]; then
   SELECTED=()

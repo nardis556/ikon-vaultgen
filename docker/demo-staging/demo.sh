@@ -25,7 +25,7 @@ D=market-making
 P=vgdemostg-$D
 cmd="${1:-check}"
 
-[ -f .env.demo-staging ] || { echo "✗ .env.demo-staging missing — copy .env.demo-staging.example, fill FUNDING_WALLET_KEY + POOL_MNEMONIC"; exit 1; }
+[ -f .env ] || [ -f .env.demo-staging ] || { echo "✗ no .env or .env.demo-staging — copy .env.demo-staging.example, fill FUNDING_WALLET_KEY + POOL_MNEMONIC"; exit 1; }
 
 # Pull, but never fatally: with `pull_policy: missing` a cached image still runs, which is
 # the normal case when the GHCR package is private.

@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 EXECUTE="${EXECUTE:-0}"
 DIRS=(ema-trend rsi-pullback macd-crossover donchian-breakout market-making bollinger-fade)
 
-[ -f .env.sandbox ] || { echo "✗ .env.sandbox missing"; exit 1; }
+[ -f .env ] || [ -f .env.sandbox ] || { echo "✗ no .env or .env.sandbox"; exit 1; }
 
 if [ "${1:-}" = "--logs" ]; then
   for d in "${DIRS[@]}"; do
